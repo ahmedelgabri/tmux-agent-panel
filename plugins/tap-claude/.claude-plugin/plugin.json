@@ -1,0 +1,13 @@
+{
+	"name": "tap",
+	"description": "Report Claude Code activity into tmux pane options for the tap pane picker",
+	"version": "0.1.0",
+	"author": {
+		"name": "Ahmed El Gabri",
+		"url": "https://github.com/ahmedelgabri"
+	},
+	"homepage": "https://github.com/ahmedelgabri/tmux-agent-panel",
+	"repository": "https://github.com/ahmedelgabri/tmux-agent-panel",
+	"license": "MIT",
+	"keywords": ["tmux", "fzf", "agent-status"]
+}
