@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,7 +24,21 @@ permission requests become blocked, everything else becomes waiting.
 'clear' unsets both options.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return state.Set(args[0], titleStdin, os.Stdin)
+		resolved, err := state.Set(args[0], titleStdin, os.Stdin)
+		if err != nil {
+			return err
+		}
+		// Hooks run with stdout piped and stay silent; only interactive
+		// use gets feedback.
+		if resolved != "" && stdoutIsTTY() {
+			pane := os.Getenv("TMUX_PANE")
+			if resolved == "clear" {
+				fmt.Printf("%s %s\n", colorize(ansiBold, pane), colorize(ansiGray, "cleared"))
+			} else {
+				fmt.Printf("%s @agent_state = %s\n", colorize(ansiBold, pane), colorize(stateColor(resolved), resolved))
+			}
+		}
+		return nil
 	},
 }
 

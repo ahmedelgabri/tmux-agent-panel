@@ -25,22 +25,23 @@ var validStates = map[string]bool{
 	"blocked": true,
 }
 
-// Set records the given state on $TMUX_PANE. Outside tmux it is a no-op:
-// hooks fire for agents running anywhere, but only tmux panes can display
-// state. "clear" unsets both options; "notification" derives the state from
-// a Notification hook payload on stdin. With titleStdin, the hook JSON's
-// .prompt becomes @agent_task.
-func Set(st string, titleStdin bool, stdin io.Reader) error {
+// Set records the given state on $TMUX_PANE and returns what it resolved to
+// ("clear", or a concrete state — notification payloads resolve to
+// blocked/waiting). Outside tmux it is a no-op returning "": hooks fire for
+// agents running anywhere, but only tmux panes can display state. "clear"
+// unsets both options. With titleStdin, the hook JSON's .prompt becomes
+// @agent_task.
+func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 	pane := os.Getenv("TMUX_PANE")
 	if !tmux.InsideTmux() || pane == "" {
-		return nil
+		return "", nil
 	}
 
 	if st == "clear" {
 		// Unset fails when the option was never set; that is fine.
 		_ = tmux.Run("set-option", "-pu", "-t", pane, "@agent_state")
 		_ = tmux.Run("set-option", "-pu", "-t", pane, "@agent_task")
-		return nil
+		return "clear", nil
 	}
 
 	var payload []byte
@@ -51,19 +52,21 @@ func Set(st string, titleStdin bool, stdin io.Reader) error {
 		st = RouteNotification(payload)
 	}
 	if !validStates[st] {
-		return fmt.Errorf("invalid state %q (want running|idle|waiting|blocked|notification|clear)", st)
+		return "", fmt.Errorf("invalid state %q (want running|idle|waiting|blocked|notification|clear)", st)
 	}
 
 	if err := tmux.Run("set-option", "-p", "-t", pane, "@agent_state", st); err != nil {
-		return err
+		return "", err
 	}
 
 	if titleStdin {
 		if task := TaskFromPrompt(payload); task != "" {
-			return tmux.Run("set-option", "-p", "-t", pane, "@agent_task", task)
+			if err := tmux.Run("set-option", "-p", "-t", pane, "@agent_task", task); err != nil {
+				return "", err
+			}
 		}
 	}
-	return nil
+	return st, nil
 }
 
 // RouteNotification maps a Notification hook payload to a state: permission
