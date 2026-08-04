@@ -34,7 +34,7 @@
 
             src = lib.cleanSource ./.;
 
-            vendorHash = lib.fakeHash;
+            vendorHash = "sha256-TAJdPTgtB1miB5qTYB+pwTvpulSMSxlG/7yKO7DknUc=";
 
             ldflags = [
               "-s"
