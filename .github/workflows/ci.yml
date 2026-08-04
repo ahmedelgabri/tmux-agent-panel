@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: NixOS/nix-installer-action@main
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+
+      - name: Check formatting
+        run: nix develop --command just fmt-check
+
+      - name: Go vet
+        run: nix develop --command just vet
+
+      - name: Staticcheck
+        run: nix develop --command just staticcheck
+
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v2
+
+      - name: Install bats and tmux
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y bats tmux
+          else
+            brew install bats-core tmux
+          fi
+
+      - name: Run unit tests
+        run: just test
+
+      - name: Run race tests
+        run: just test-race
+
+      - name: Run E2E tests
+        run: just test-e2e
+
+  build:
+    name: Build (Nix)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: NixOS/nix-installer-action@main
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+
+      - name: Check flake
+        run: nix flake check
+
+      - name: Build package
+        run: nix build
+
+      - name: Test executable runs
+        run: ./result/bin/tap --version
