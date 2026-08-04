@@ -35,6 +35,28 @@ tap doctor      # verify the wiring
 
 `tap uninstall` removes exactly what `install` added and nothing else. Files managed by Nix/Home Manager (store symlinks) are refused with a pointer to declarative wiring instead.
 
+### Or install through each agent's own package manager
+
+The repo doubles as a plugin/package for each agent, wiring the same hooks through the agent's native channel instead of `tap install` editing config files (the `tap` binary itself still needs to be on `PATH`):
+
+```sh
+# Claude Code
+/plugin marketplace add ahmedelgabri/tmux-agent-panel
+/plugin install tap@tmux-agent-panel
+
+# Codex (consumes Claude-compatible plugin marketplaces)
+codex plugin marketplace add https://github.com/ahmedelgabri/tmux-agent-panel
+codex plugin add tap-codex@tmux-agent-panel
+
+# pi (repo is a pi package; extensions/ is auto-discovered)
+pi install https://github.com/ahmedelgabri/tmux-agent-panel
+
+# or try it for one run without installing
+pi -e git:github.com/ahmedelgabri/tmux-agent-panel
+```
+
+Pick one channel per agent — either the plugin or `tap install`, not both, or the hooks fire twice (harmless but wasteful).
+
 Bind the picker wherever you like, e.g. a zsh widget on `C-Space`:
 
 ```sh
