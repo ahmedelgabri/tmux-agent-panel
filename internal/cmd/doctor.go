@@ -15,12 +15,14 @@ var doctorCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		failed := false
 		for _, c := range agents.Doctor() {
-			mark := "✓"
+			mark := colorize(ansiGreen, "✓")
+			detail := colorize(ansiGray, c.Detail)
 			if !c.OK {
-				mark = "✗"
+				mark = colorize(ansiRed, "✗")
+				detail = colorize(ansiRed, c.Detail)
 				failed = true
 			}
-			fmt.Printf("%s %-8s %s\n", mark, c.Name, c.Detail)
+			fmt.Printf("%s %s %s\n", mark, colorize(ansiBold, fmt.Sprintf("%-8s", c.Name)), detail)
 		}
 		if failed {
 			return fmt.Errorf("some checks failed")
