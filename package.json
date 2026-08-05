@@ -1,6 +1,6 @@
 {
   "name": "pi-tmux-agent-panel",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Report coding-agent activity into tmux pane options for the tap pane picker",
   "keywords": [
     "pi-package",
