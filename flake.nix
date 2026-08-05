@@ -78,6 +78,7 @@
             nixd
             bats
             tmux
+            jq
             go
             gopls
             gofumpt

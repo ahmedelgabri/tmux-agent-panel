@@ -25,6 +25,9 @@ jobs:
       - name: Check formatting
         run: nix develop --command just fmt-check
 
+      - name: Check version consistency
+        run: nix develop --command just check-versions
+
       - name: Go vet
         run: nix develop --command just vet
 

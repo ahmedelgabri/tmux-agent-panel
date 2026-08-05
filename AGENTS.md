@@ -25,7 +25,8 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 - No trailing whitespace, including on blank lines.
 - Conventional Commits (`feat:`, `fix:`, `chore:`, scoped when it helps).
 - Do not hard-wrap Markdown.
-- `just check` must pass before pushing (vet, staticcheck, tests, e2e, formatting).
+- `just check` must pass before pushing (vet, staticcheck, tests, e2e, formatting, version consistency).
+- `flake.nix` is the version source of truth; after bumping it, run `just sync-versions` to mirror it into `package.json` and the plugin manifests.
 
 ## Development
 

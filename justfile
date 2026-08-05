@@ -41,8 +41,8 @@ fmt:
 fmt-check:
     nix fmt -- --fail-on-change
 
-# Run all checks (lint + tests + race + E2E + format)
-check: vet staticcheck test-race test-e2e fmt-check
+# Run all checks (lint + tests + race + E2E + format + versions)
+check: vet staticcheck test-race test-e2e fmt-check check-versions
 
 # Build with Nix
 nix-build:
@@ -55,3 +55,28 @@ nix-check:
 # Remove build artifacts
 clean:
     rm -f tap
+
+# flake.nix is the version source of truth; mirror it into the JSON manifests
+sync-versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(sed -nE 's/.*version = "([^"]+)".*/\1/p' flake.nix | head -1)
+    for f in package.json plugins/tap-claude/.claude-plugin/plugin.json plugins/tap-codex/.claude-plugin/plugin.json; do
+        jq --arg v "$version" '.version = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    done
+    echo "synced version $version"
+
+# Fail when any JSON manifest disagrees with the flake.nix version
+check-versions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version=$(sed -nE 's/.*version = "([^"]+)".*/\1/p' flake.nix | head -1)
+    status=0
+    for f in package.json plugins/tap-claude/.claude-plugin/plugin.json plugins/tap-codex/.claude-plugin/plugin.json; do
+        got=$(jq -r '.version' "$f")
+        if [ "$got" != "$version" ]; then
+            echo "$f: $got != $version (run 'just sync-versions')" >&2
+            status=1
+        fi
+    done
+    exit $status
