@@ -75,13 +75,12 @@ func forEachSelected(fn func(agents.Agent) error, verb string) error {
 }
 
 func init() {
-	for _, c := range []*cobra.Command{installCmd, uninstallCmd} {
-		for _, a := range agents.All() {
-			name := a.Name
-			if installFlags[name] == nil {
-				installFlags[name] = new(bool)
-			}
-			c.Flags().BoolVar(installFlags[name], name, false, "only "+name)
+	// One shared *bool per agent, registered on both commands.
+	for _, a := range agents.All() {
+		flag := new(bool)
+		installFlags[a.Name] = flag
+		for _, c := range []*cobra.Command{installCmd, uninstallCmd} {
+			c.Flags().BoolVar(flag, a.Name, false, "only "+a.Name)
 		}
 	}
 	rootCmd.AddCommand(installCmd, uninstallCmd)
