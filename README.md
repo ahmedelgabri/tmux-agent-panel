@@ -59,8 +59,7 @@ bind-key Space run-shell 'tap pick'
 
 ### Reading the list
 
-- Type icons instead of a `session:window.pane` column: `❐` session pane, `⧉` persistent-popup pane (`popup_*` sessions); the full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
-- Agent icons: yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi.
+- Rows lead with an icon instead of a `session:window.pane` column: agent panes show their agent — yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi — and plain panes show the pane type, `❐` session or `⧉` persistent popup (`popup_*` sessions). The full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
 - State glyphs: green animated spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle.
 - The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
 

@@ -1,5 +1,6 @@
 // Package panes builds the picker's rows. Panes running Claude Code, Codex,
-// or pi show an agent column (icon + state glyph + task) instead of the
+// or pi show the agent icon in the leading slot and an agent column
+// (state glyph + task) instead of the
 // command column, fed by the @agent_state/@agent_task pane options that the
 // agents set via hooks/extensions; which agent a pane runs is derived from
 // its current command. Agent rows sort first (blocked, waiting, running,
@@ -127,17 +128,22 @@ func BuildRows(lines []string, o Options) []Row {
 	var plainRows []Row
 	for _, e := range entries {
 		p := e.pane
-		// Blue dot marks the pane the picker was opened from; ❐ is a
-		// regular session pane, ⧉ a persistent popup.
+		// Blue dot marks the pane the picker was opened from.
 		mark := " "
 		if p.ID == o.CurrentPane {
 			mark = ansi.BoldBlue + "●" + ansi.Reset
 		}
-		paneType := "❐"
+		// The leading icon is the pane type — ❐ regular session, ⧉
+		// persistent popup — except on agent rows, where which agent runs
+		// there is the more useful fact.
+		icon := ansi.Gray + "❐" + ansi.Reset
 		if strings.HasPrefix(p.Addr, "popup_") {
-			paneType = "⧉"
+			icon = ansi.Gray + "⧉" + ansi.Reset
 		}
-		lead := mark + " " + ansi.Gray + paneType + ansi.Reset + "  " + pad(p.Window, winWidth) + "  "
+		if e.isAgent {
+			icon = e.meta.Icon
+		}
+		lead := mark + " " + icon + "  " + pad(p.Window, winWidth) + "  "
 
 		if e.isAgent {
 			st := p.State
@@ -153,7 +159,7 @@ func BuildRows(lines []string, o Options) []Row {
 			if r := []rune(title); len(r) > state.TaskMaxLength {
 				title = string(r[:state.TaskMaxLength-1]) + "…"
 			}
-			display := lead + e.meta.Icon + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
+			display := lead + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
 			agentRows = append(agentRows, agentRow{
 				row:  Row{PaneID: p.ID, Addr: p.Addr, Display: display},
 				rank: state.ByName(st).Rank,
