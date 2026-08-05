@@ -89,8 +89,12 @@ func TestBuildRowsDisplay(t *testing.T) {
 	if strings.Contains(byID["%1"].Display, "●") {
 		t.Errorf("non-current pane should not carry the ● mark")
 	}
-	if !strings.Contains(byID["%4"].Display, "⧉") {
-		t.Errorf("popup pane should use the ⧉ icon: %q", byID["%4"].Display)
+	// Agent rows lead with the agent icon, not the pane-type icon.
+	if !strings.Contains(byID["%4"].Display, "⌬") || strings.Contains(byID["%4"].Display, "⧉") {
+		t.Errorf("agent pane should lead with its agent icon: %q", byID["%4"].Display)
+	}
+	if !strings.Contains(byID["%2"].Display, "✳") {
+		t.Errorf("claude pane should lead with ✳: %q", byID["%2"].Display)
 	}
 	if !strings.Contains(byID["%1"].Display, "❐") {
 		t.Errorf("session pane should use the ❐ icon")
