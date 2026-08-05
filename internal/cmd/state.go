@@ -3,16 +3,18 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 )
 
 var titleStdin bool
 
 var stateCmd = &cobra.Command{
-	Use:   "state <running|idle|waiting|blocked|notification|clear>",
+	Use:   "state <" + strings.Join(state.Names(), "|") + "|notification|clear>",
 	Short: "Record agent state on the enclosing tmux pane",
 	Long: `Records coding-agent activity in pane-scoped tmux user options
 (@agent_state, @agent_task) so the picker can render agent rows. Meant to be
@@ -33,9 +35,9 @@ permission requests become blocked, everything else becomes waiting.
 		if resolved != "" && stdoutIsTTY() {
 			pane := os.Getenv("TMUX_PANE")
 			if resolved == "clear" {
-				fmt.Printf("%s %s\n", colorize(ansiBold, pane), colorize(ansiGray, "cleared"))
+				fmt.Printf("%s %s\n", colorize(ansi.Bold, pane), colorize(ansi.Gray, "cleared"))
 			} else {
-				fmt.Printf("%s @agent_state = %s\n", colorize(ansiBold, pane), colorize(stateColor(resolved), resolved))
+				fmt.Printf("%s %s = %s\n", colorize(ansi.Bold, pane), state.StateOption, colorize(state.ByName(resolved).Color, resolved))
 			}
 		}
 		return nil

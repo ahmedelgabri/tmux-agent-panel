@@ -14,26 +14,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
-)
-
-const (
-	reset   = "\033[0m"
-	gray    = "\033[90m"
-	red     = "\033[31m"
-	green   = "\033[32m"
-	yellow  = "\033[33m"
-	blue    = "\033[1;34m"
-	magenta = "\033[35m"
-	cyan    = "\033[36m"
-
-	titleMax = 60
 )
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠇"}
 
 // listFormat matches the field order Pane and BuildRows expect.
-const listFormat = "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{window_name}\t#{pane_current_command}\t#{pane_current_path}\t#{@agent_state}\t#{@agent_task}\t#{pane_title}"
+const listFormat = "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{window_name}\t#{pane_current_command}\t#{pane_current_path}\t#{" + state.StateOption + "}\t#{" + state.TaskOption + "}\t#{pane_title}"
 
 // Pane is one line of `tmux list-panes` output.
 type Pane struct {
@@ -132,13 +121,13 @@ func BuildRows(lines []string, o Options) []Row {
 		// regular session pane, ⧉ a persistent popup.
 		mark := " "
 		if p.ID == o.CurrentPane {
-			mark = blue + "●" + reset
+			mark = ansi.BoldBlue + "●" + ansi.Reset
 		}
 		paneType := "❐"
 		if strings.HasPrefix(p.Addr, "popup_") {
 			paneType = "⧉"
 		}
-		lead := mark + " " + gray + paneType + reset + "  " + pad(p.Window, winWidth) + "  "
+		lead := mark + " " + ansi.Gray + paneType + ansi.Reset + "  " + pad(p.Window, winWidth) + "  "
 
 		var key, display string
 		if e.agent != "" {
@@ -154,14 +143,14 @@ func BuildRows(lines []string, o Options) []Row {
 			if st == "" {
 				st = fallbackState(e.agent, p.Title)
 			}
-			if r := []rune(title); len(r) > titleMax {
-				title = string(r[:titleMax-1]) + "…"
+			if r := []rune(title); len(r) > state.TaskMaxLength {
+				title = string(r[:state.TaskMaxLength-1]) + "…"
 			}
-			key = fmt.Sprintf("1%d%06d", stateRank(st), i)
-			display = lead + agentIcon(e.agent) + "  " + stateGlyph(st, spinner) + " " + title + "  " + gray + p.Path + reset
+			key = fmt.Sprintf("1%d%06d", state.ByName(st).Rank, i)
+			display = lead + agentIcon(e.agent) + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
 		} else {
 			key = fmt.Sprintf("3%07d", i)
-			display = lead + cyan + pad(p.Command, cmdWidth) + reset + "  " + gray + p.Path + reset
+			display = lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + "  " + ansi.Gray + p.Path + ansi.Reset
 		}
 		rows = append(rows, Row{Key: key, PaneID: p.ID, Addr: p.Addr, Display: display})
 	}
@@ -170,8 +159,8 @@ func BuildRows(lines []string, o Options) []Row {
 	if !o.AgentsOnly && agents > 0 && agents < len(entries) {
 		rows = append(
 			rows,
-			Row{Key: "0", Display: gray + "──── agents ────" + reset},
-			Row{Key: "2", Display: gray + "──── panes ─────" + reset},
+			Row{Key: "0", Display: ansi.Gray + "──── agents ────" + ansi.Reset},
+			Row{Key: "2", Display: ansi.Gray + "──── panes ─────" + ansi.Reset},
 		)
 	}
 
@@ -213,40 +202,27 @@ func pad(s string, width int) string {
 	return s
 }
 
-func stateRank(st string) int {
-	switch st {
-	case "blocked":
-		return 0
-	case "waiting":
-		return 1
-	case "running":
-		return 2
-	}
-	return 3
-}
-
 // Per-agent icon in a distinct ANSI slot: Claude yellow (closest named slot
 // to its orange), Codex cyan, pi magenta.
 func agentIcon(agent string) string {
 	switch agent {
 	case "claude":
-		return yellow + "✳" + reset
+		return ansi.Yellow + "✳" + ansi.Reset
 	case "codex":
-		return cyan + "⌬" + reset
+		return ansi.Cyan + "⌬" + ansi.Reset
 	}
-	return magenta + "π" + reset
+	return ansi.Magenta + "π" + ansi.Reset
 }
 
 func stateGlyph(st, spinner string) string {
-	switch st {
-	case "running":
-		return green + spinner + reset
-	case "blocked":
-		return red + "▲" + reset
-	case "waiting":
-		return yellow + "?" + reset
+	d := state.ByName(st)
+	glyph := d.Glyph
+	// running is the one animated state; its glyph is the current
+	// spinner frame rather than a fixed rune.
+	if glyph == "" {
+		glyph = spinner
 	}
-	return gray + "◌" + reset
+	return d.Color + glyph + ansi.Reset
 }
 
 // Claude Code prefixes its pane title with a spinner glyph while working

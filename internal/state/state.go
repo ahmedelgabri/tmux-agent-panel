@@ -12,17 +12,66 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
 
 // TaskMaxLength caps @agent_task so rows stay scannable.
 const TaskMaxLength = 60
 
-var validStates = map[string]bool{
-	"running": true,
-	"idle":    true,
-	"waiting": true,
-	"blocked": true,
+// Pane-scoped tmux user options tap owns. The picker reads what Set (and
+// the pi extension) writes.
+const (
+	StateOption = "@agent_state"
+	TaskOption  = "@agent_task"
+)
+
+// Desc describes one agent state: how it validates, sorts, and renders.
+// Everything that varies per state lives here so adding one is a
+// single-line change.
+type Desc struct {
+	Name  string
+	Rank  int    // picker sort order within the agents section
+	Glyph string // running has none: the picker animates a spinner instead
+	Color string
+}
+
+// States is the canonical vocabulary, in rank order — blocked surfaces
+// first because it needs the user.
+var States = []Desc{
+	{Name: "blocked", Rank: 0, Glyph: "▲", Color: ansi.Red},
+	{Name: "waiting", Rank: 1, Glyph: "?", Color: ansi.Yellow},
+	{Name: "running", Rank: 2, Glyph: "", Color: ansi.Green},
+	{Name: "idle", Rank: 3, Glyph: "◌", Color: ansi.Gray},
+}
+
+// ByName returns the descriptor for a state, falling back to idle so
+// unknown or stale values degrade to the least alarming rendering.
+func ByName(name string) Desc {
+	for _, d := range States {
+		if d.Name == name {
+			return d
+		}
+	}
+	return States[len(States)-1]
+}
+
+// Names lists the state names in rank order.
+func Names() []string {
+	names := make([]string, len(States))
+	for i, d := range States {
+		names[i] = d.Name
+	}
+	return names
+}
+
+func valid(name string) bool {
+	for _, d := range States {
+		if d.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // Set records the given state on $TMUX_PANE and returns what it resolved to
@@ -39,8 +88,8 @@ func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 
 	if st == "clear" {
 		// Unset fails when the option was never set; that is fine.
-		_ = tmux.Run("set-option", "-pu", "-t", pane, "@agent_state")
-		_ = tmux.Run("set-option", "-pu", "-t", pane, "@agent_task")
+		_ = tmux.Run("set-option", "-pu", "-t", pane, StateOption)
+		_ = tmux.Run("set-option", "-pu", "-t", pane, TaskOption)
 		return "clear", nil
 	}
 
@@ -51,17 +100,17 @@ func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 	if st == "notification" {
 		st = RouteNotification(payload)
 	}
-	if !validStates[st] {
-		return "", fmt.Errorf("invalid state %q (want running|idle|waiting|blocked|notification|clear)", st)
+	if !valid(st) {
+		return "", fmt.Errorf("invalid state %q (want %s|notification|clear)", st, strings.Join(Names(), "|"))
 	}
 
-	if err := tmux.Run("set-option", "-p", "-t", pane, "@agent_state", st); err != nil {
+	if err := tmux.Run("set-option", "-p", "-t", pane, StateOption, st); err != nil {
 		return "", err
 	}
 
 	if titleStdin {
 		if task := TaskFromPrompt(payload); task != "" {
-			if err := tmux.Run("set-option", "-p", "-t", pane, "@agent_task", task); err != nil {
+			if err := tmux.Run("set-option", "-p", "-t", pane, TaskOption, task); err != nil {
 				return "", err
 			}
 		}

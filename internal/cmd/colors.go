@@ -1,33 +1,16 @@
 package cmd
 
-import "os"
+import (
+	"os"
 
-const (
-	ansiReset  = "\033[0m"
-	ansiBold   = "\033[1m"
-	ansiGray   = "\033[90m"
-	ansiRed    = "\033[31m"
-	ansiGreen  = "\033[32m"
-	ansiYellow = "\033[33m"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 )
 
 func colorize(color, s string) string {
 	if os.Getenv("NO_COLOR") != "" {
 		return s
 	}
-	return color + s + ansiReset
-}
-
-func stateColor(st string) string {
-	switch st {
-	case "running":
-		return ansiGreen
-	case "blocked":
-		return ansiRed
-	case "waiting":
-		return ansiYellow
-	}
-	return ansiGray
+	return color + s + ansi.Reset
 }
 
 // stdoutIsTTY separates interactive use from hook invocations: hooks get
