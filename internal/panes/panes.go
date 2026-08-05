@@ -9,7 +9,6 @@
 package panes
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -37,11 +36,10 @@ type Pane struct {
 	Title   string // pane_title
 }
 
-// Row is one picker entry. Key exists only to order the list; PaneID and
-// Addr ride along as hidden fzf fields (used by --preview and the preview
-// label). Divider rows have an empty PaneID, making selecting them a no-op.
+// Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
+// (used by --preview and the preview label). Divider rows have an empty
+// PaneID, making selecting them a no-op.
 type Row struct {
-	Key     string
 	PaneID  string
 	Addr    string
 	Display string
@@ -112,8 +110,15 @@ func BuildRows(lines []string, o Options) []Row {
 	}
 
 	spinner := spinnerFrames[o.Frame%len(spinnerFrames)]
-	var rows []Row
-	for i, e := range entries {
+	// Agent rows sort by state rank (blocked first) but keep their
+	// original order within a state; plain rows keep list-panes order.
+	type agentRow struct {
+		row  Row
+		rank int
+	}
+	var agentRows []agentRow
+	var plainRows []Row
+	for _, e := range entries {
 		p := e.pane
 		// Blue dot marks the pane the picker was opened from; ❐ is a
 		// regular session pane, ⧉ a persistent popup.
@@ -127,7 +132,6 @@ func BuildRows(lines []string, o Options) []Row {
 		}
 		lead := mark + " " + ansi.Gray + paneType + ansi.Reset + "  " + pad(p.Window, winWidth) + "  "
 
-		var key, display string
 		if e.isAgent {
 			st := p.State
 			title := p.Task
@@ -142,26 +146,32 @@ func BuildRows(lines []string, o Options) []Row {
 			if r := []rune(title); len(r) > state.TaskMaxLength {
 				title = string(r[:state.TaskMaxLength-1]) + "…"
 			}
-			key = fmt.Sprintf("1%d%06d", state.ByName(st).Rank, i)
-			display = lead + e.meta.Icon + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
+			display := lead + e.meta.Icon + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
+			agentRows = append(agentRows, agentRow{
+				row:  Row{PaneID: p.ID, Addr: p.Addr, Display: display},
+				rank: state.ByName(st).Rank,
+			})
 		} else {
-			key = fmt.Sprintf("3%07d", i)
-			display = lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + "  " + ansi.Gray + p.Path + ansi.Reset
+			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + "  " + ansi.Gray + p.Path + ansi.Reset
+			plainRows = append(plainRows, Row{PaneID: p.ID, Addr: p.Addr, Display: display})
 		}
-		rows = append(rows, Row{Key: key, PaneID: p.ID, Addr: p.Addr, Display: display})
 	}
+
+	sort.SliceStable(agentRows, func(a, b int) bool { return agentRows[a].rank < agentRows[b].rank })
 
 	// Dividers only make sense when both groups are present.
-	if !o.AgentsOnly && agentCount > 0 && agentCount < len(entries) {
-		rows = append(
-			rows,
-			Row{Key: "0", Display: ansi.Gray + "──── agents ────" + ansi.Reset},
-			Row{Key: "2", Display: ansi.Gray + "──── panes ─────" + ansi.Reset},
-		)
+	divided := !o.AgentsOnly && agentCount > 0 && agentCount < len(entries)
+	rows := make([]Row, 0, len(entries)+2)
+	if divided {
+		rows = append(rows, Row{Display: ansi.Gray + "──── agents ────" + ansi.Reset})
 	}
-
-	sort.Slice(rows, func(a, b int) bool { return rows[a].Key < rows[b].Key })
-	return rows
+	for _, a := range agentRows {
+		rows = append(rows, a.row)
+	}
+	if divided {
+		rows = append(rows, Row{Display: ansi.Gray + "──── panes ─────" + ansi.Reset})
+	}
+	return append(rows, plainRows...)
 }
 
 // Render emits rows in the picker's wire format: pane_id, address, display,
