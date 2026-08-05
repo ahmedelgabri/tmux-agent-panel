@@ -19,6 +19,12 @@ When no options are set (hooks not yet active), the picker falls back to parsing
 ## Install
 
 ```sh
+# Homebrew
+brew install ahmedelgabri/tap/tmux-agent-panel
+
+# mise (prebuilt binary from GitHub releases via the ubi backend)
+mise use -g "ubi:ahmedelgabri/tmux-agent-panel[exe=tap]"
+
 # Nix
 nix run github:ahmedelgabri/tmux-agent-panel
 

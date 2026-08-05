@@ -21,6 +21,12 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 ## Quick Start
 
 ```bash
+# Homebrew
+brew install ahmedelgabri/tap/tmux-agent-panel
+
+# mise
+mise use -g "ubi:ahmedelgabri/tmux-agent-panel[exe=tap]"
+
 # Nix Flakes
 nix run github:ahmedelgabri/tmux-agent-panel
 
