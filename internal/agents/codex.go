@@ -1,18 +1,13 @@
 package agents
 
-// Codex hook wiring (hooks.json shares Claude's schema). Codex has no
-// Notification-equivalent event, so there is no waiting state;
-// PermissionRequest maps straight to blocked. The prompt is the only task
-// source, hence --title-stdin on UserPromptSubmit. Hooks load at session
+import "github.com/ahmedelgabri/tmux-agent-panel/plugins"
+
+// The hook set lives in plugins/tap-codex/hooks/hooks.json — the same file
+// the Codex plugin ships — so both install channels stay identical. Codex
+// has no Notification-equivalent event, so there is no waiting state;
+// PermissionRequest maps straight to blocked, and the prompt is the only
+// task source (--title-stdin on UserPromptSubmit). Hooks load at session
 // start only.
-var codexEvents = map[string]string{
-	"SessionStart":      "idle",
-	"UserPromptSubmit":  "running --title-stdin",
-	"PreToolUse":        "running",
-	"Stop":              "idle",
-	"PermissionRequest": "blocked",
-	"SessionEnd":        "clear",
-}
 
 func codexHooksPath() (string, error) {
 	dir, err := envOrHome("CODEX_HOME", ".codex")
@@ -27,7 +22,7 @@ func installCodex(self string) error {
 	if err != nil {
 		return err
 	}
-	return installHooks(path, self, codexEvents)
+	return installHooks(path, self, plugins.CodexHooks)
 }
 
 func uninstallCodex() error {

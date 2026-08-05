@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/plugins"
 )
 
 // existing simulates a user settings.json with hooks tap must not touch.
@@ -22,12 +24,17 @@ const existing = `{
 	}
 }`
 
-func events() map[string]string {
-	return map[string]string{
-		"SessionStart": "idle",
-		"Stop":         "idle",
+// testHooks mirrors the embedded plugin hooks.json shape.
+var testHooks = []byte(`{
+	"hooks": {
+		"SessionStart": [
+			{"hooks": [{"type": "command", "command": "tap state idle", "async": true}]}
+		],
+		"Stop": [
+			{"hooks": [{"type": "command", "command": "tap state idle", "async": true}]}
+		]
 	}
-}
+}`)
 
 func read(t *testing.T, path string) map[string]any {
 	t.Helper()
@@ -47,7 +54,7 @@ func TestInstallPreservesForeignHooks(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", events()); err != nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,11 +82,11 @@ func TestInstallIdempotent(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", events()); err != nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
 		t.Fatal(err)
 	}
 	once, _ := os.ReadFile(path)
-	if err := installHooks(path, "/bin/tap", events()); err != nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
 		t.Fatal(err)
 	}
 	twice, _ := os.ReadFile(path)
@@ -90,7 +97,7 @@ func TestInstallIdempotent(t *testing.T) {
 
 func TestInstallCreatesMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "hooks.json")
-	if err := installHooks(path, "/bin/tap", events()); err != nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
 		t.Fatal(err)
 	}
 	m := read(t, path)
@@ -104,7 +111,7 @@ func TestUninstallRemovesOnlyOurs(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", events()); err != nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
 		t.Fatal(err)
 	}
 	if err := uninstallHooks(path); err != nil {
@@ -125,6 +132,53 @@ func TestUninstallRemovesOnlyOurs(t *testing.T) {
 	}
 }
 
+func TestInstallRewritesPathButKeepsMarker(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), `"command": "tap state`) {
+		t.Errorf("installed commands must use the binary path, not bare `tap`:\n%s", data)
+	}
+	if !strings.Contains(string(data), "/bin/tap state idle") {
+		t.Errorf("rewritten command missing:\n%s", data)
+	}
+}
+
+// The embedded plugin files are the single source of truth for installs;
+// every command must carry the marker so idempotent re-install, uninstall,
+// and the PATH rewrite all keep working when the files change.
+func TestEmbeddedPluginHooksAreCanonical(t *testing.T) {
+	for name, data := range map[string][]byte{
+		"claude": plugins.ClaudeHooks,
+		"codex":  plugins.CodexHooks,
+	} {
+		var p pluginHooks
+		if err := json.Unmarshal(data, &p); err != nil {
+			t.Fatalf("%s: embedded hooks.json invalid: %v", name, err)
+		}
+		if len(p.Hooks) == 0 {
+			t.Fatalf("%s: embedded hooks.json has no events", name)
+		}
+		for event, groups := range p.Hooks {
+			for _, g := range groups {
+				group := g.(map[string]any)
+				for _, e := range group["hooks"].([]any) {
+					entry := e.(map[string]any)
+					cmd, _ := entry["command"].(string)
+					if !strings.HasPrefix(cmd, Marker) {
+						t.Errorf("%s/%s: command %q must start with %q", name, event, cmd, Marker)
+					}
+					if async, _ := entry["async"].(bool); !async {
+						t.Errorf("%s/%s: command %q must be async", name, event, cmd)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestUninstallMissingFileIsNoop(t *testing.T) {
 	if err := uninstallHooks(filepath.Join(t.TempDir(), "nope.json")); err != nil {
 		t.Errorf("missing file should be a no-op, got %v", err)
@@ -136,7 +190,7 @@ func TestRefusesInvalidJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", events()); err == nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err == nil {
 		t.Errorf("install should refuse invalid JSON")
 	}
 	if err := uninstallHooks(path); err == nil {
@@ -149,7 +203,7 @@ func TestRefusesUnwritableFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o444); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", events()); err == nil {
+	if err := installHooks(path, "/bin/tap", testHooks); err == nil {
 		t.Errorf("install should refuse a read-only file")
 	}
 }

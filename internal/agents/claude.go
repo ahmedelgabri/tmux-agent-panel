@@ -1,17 +1,12 @@
 package agents
 
-// Claude Code hook wiring. No --title-stdin: Claude's live pane title
-// (glyph + task summary) is a better task source than the raw prompt, so
-// the picker parses that instead. Notification routes to blocked/waiting
-// based on the payload.
-var claudeEvents = map[string]string{
-	"SessionStart":     "idle",
-	"UserPromptSubmit": "running",
-	"PreToolUse":       "running",
-	"Stop":             "idle",
-	"Notification":     "notification",
-	"SessionEnd":       "clear",
-}
+import "github.com/ahmedelgabri/tmux-agent-panel/plugins"
+
+// The hook set lives in plugins/tap-claude/hooks/hooks.json — the same file
+// the Claude Code plugin ships — so both install channels stay identical.
+// Notably it has no --title-stdin: Claude's live pane title (glyph + task
+// summary) is a better task source than the raw prompt, so the picker
+// parses that instead.
 
 func claudeSettingsPath() (string, error) {
 	if dir, err := envOrHome("CLAUDE_CONFIG_DIR", ".claude"); err == nil {
@@ -26,7 +21,7 @@ func installClaude(self string) error {
 	if err != nil {
 		return err
 	}
-	return installHooks(path, self, claudeEvents)
+	return installHooks(path, self, plugins.ClaudeHooks)
 }
 
 func uninstallClaude() error {

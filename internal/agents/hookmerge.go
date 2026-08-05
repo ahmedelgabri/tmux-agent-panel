@@ -18,19 +18,21 @@ import (
 // Marker identifies hook entries owned by tap inside foreign config files.
 const Marker = "tap state"
 
-// hookEntry is one command hook in the Claude/Codex schema.
-func hookEntry(self, stateArgs string) map[string]any {
-	return map[string]any{
-		"type":    "command",
-		"command": fmt.Sprintf("%s state %s", self, stateArgs),
-		"async":   true,
-	}
+// pluginHooks is the shape of an embedded plugin hooks.json.
+type pluginHooks struct {
+	Hooks map[string][]any `json:"hooks"`
 }
 
-// installHooks merges tap's hook entries into the JSON file at path,
-// creating the file if it doesn't exist. events maps hook event names to
-// `tap state` arguments.
-func installHooks(path, self string, events map[string]string) error {
+// installHooks merges the hook groups from an embedded plugin hooks.json
+// into the JSON file at path, creating the file if it doesn't exist. The
+// plugin files invoke `tap` from PATH; installed hooks get the resolved
+// binary path instead so they keep working regardless of PATH.
+func installHooks(path, self string, hooksJSON []byte) error {
+	var plugin pluginHooks
+	if err := json.Unmarshal(hooksJSON, &plugin); err != nil {
+		return fmt.Errorf("parsing embedded plugin hooks: %w", err)
+	}
+
 	if err := checkWritable(path); err != nil {
 		return err
 	}
@@ -57,18 +59,38 @@ func installHooks(path, self string, events map[string]string) error {
 		root["hooks"] = hooks
 	}
 
-	for event, stateArgs := range events {
-		groups, _ := hooks[event].([]any)
-		groups = removeMarked(groups)
-		// tap gets its own matcher group so removal never has to reason
-		// about entries sharing a group with user hooks.
-		groups = append(groups, map[string]any{
-			"hooks": []any{hookEntry(self, stateArgs)},
-		})
-		hooks[event] = groups
+	for event, groups := range plugin.Hooks {
+		existing, _ := hooks[event].([]any)
+		// tap's groups never mix with user hooks, so removal stays surgical.
+		hooks[event] = append(removeMarked(existing), rewriteCommands(groups, self)...)
 	}
 
 	return writeJSON(path, root)
+}
+
+// rewriteCommands swaps the plugin files' PATH-based `tap` invocation for
+// the installing binary's own path.
+func rewriteCommands(groups []any, self string) []any {
+	for _, g := range groups {
+		group, ok := g.(map[string]any)
+		if !ok {
+			continue
+		}
+		entries, ok := group["hooks"].([]any)
+		if !ok {
+			continue
+		}
+		for _, e := range entries {
+			entry, ok := e.(map[string]any)
+			if !ok {
+				continue
+			}
+			if cmd, _ := entry["command"].(string); strings.HasPrefix(cmd, "tap ") {
+				entry["command"] = self + strings.TrimPrefix(cmd, "tap")
+			}
+		}
+	}
+	return groups
 }
 
 // uninstallHooks removes every tap-owned entry from the file. Missing file

@@ -14,7 +14,7 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 - `internal/agents/` — hook installers for Claude Code, Codex, and pi
 - `internal/tmux/` — thin tmux command wrapper
 - `tests/` — bats end-to-end tests (run against a scratch tmux server)
-- `.claude-plugin/` + `plugins/` — plugin marketplace for Claude Code (`tap`) and Codex (`tap-codex`); the hooks there must stay in sync with `internal/agents/{claude,codex}.go`
+- `.claude-plugin/` + `plugins/` — plugin marketplace for Claude Code (`tap`) and Codex (`tap-codex`); the hooks.json files are the single source of truth — `tap install` embeds them (`plugins/embed.go`) and rewrites the `tap` prefix to the resolved binary path
 - `package.json` + `extensions/` — pi package surface; `extensions/tap-agent-state.ts` is a symlink to `internal/agents/pi_extension.ts` (the canonical copy, embedded into the binary)
 - `.github/workflows/` — CI (lint/test/build), Pages deploy, and release (cross-compiled binaries; no Homebrew publishing)
 
