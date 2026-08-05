@@ -6,18 +6,6 @@ An agent-aware tmux pane picker. `tap` lists every pane across all your tmux ses
 
 fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
-## How it works
-
-Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that `tap install` wires into each agent's own configuration. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
-
-| Agent       | Integration                                | States                                     |
-| ----------- | ------------------------------------------ | ------------------------------------------ |
-| Claude Code | hook entries in `~/.claude/settings.json`  | running / idle / waiting / blocked         |
-| Codex       | hook entries in `~/.codex/hooks.json`      | running / idle / blocked; task from prompt |
-| pi          | extension dropped into pi's extensions dir | running / idle; task from prompt           |
-
-When no options are set (hooks not yet active), the picker falls back to parsing Claude Code's pane title, which carries a spinner glyph while working and `✳` when waiting.
-
 ## Install
 
 ```sh
@@ -43,9 +31,42 @@ tap doctor # verify the wiring
 
 `tap uninstall` removes exactly what `install` added and nothing else. Files managed by Nix/Home Manager (store symlinks) are refused with a pointer to declarative wiring instead.
 
-### Or install through each agent's own package manager
+## Usage
 
-The repo doubles as a plugin/package for each agent, wiring the same hooks through the agent's native channel instead of `tap install` editing config files (the `tap` binary itself still needs to be on `PATH`):
+Open the picker from any shell inside tmux:
+
+```sh
+tap pick
+```
+
+Inside the picker: `Enter` switches to the pane, `ctrl-a` toggles an agents-only view, `?` toggles the preview, and `ctrl-x`/`ctrl-w`/`ctrl-q` kill the highlighted pane/window/session (no confirmation). The list live-refreshes 5×/second while open, so states, tasks, and the spinner animate in place.
+
+Bind it wherever you like, e.g. a zsh widget on `C-Space`:
+
+```sh
+if [[ -n ${TMUX-} ]]; then
+  tap-widget() { tap pick; zle reset-prompt }
+  zle -N tap-widget
+  bindkey '^@' tap-widget
+fi
+```
+
+or a tmux key:
+
+```tmux
+bind-key Space run-shell 'tap pick'
+```
+
+### Reading the list
+
+- Type icons instead of a `session:window.pane` column: `❐` session pane, `⧉` persistent-popup pane (`popup_*` sessions); the full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
+- Agent icons: yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi.
+- State glyphs: green animated spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle.
+- The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
+
+## Installing through each agent's own package manager
+
+Instead of `tap install` editing config files, the repo doubles as a plugin/package for each agent and wires the same hooks through the agent's native channel (the `tap` binary itself still needs to be on `PATH`):
 
 ```sh
 # Claude Code
@@ -65,43 +86,27 @@ pi -e git:github.com/ahmedelgabri/tmux-agent-panel
 
 Pick one channel per agent — either the plugin or `tap install`, not both, or the hooks fire twice (harmless but wasteful).
 
-Bind the picker wherever you like, e.g. a zsh widget on `C-Space`:
+## How it works
 
-```sh
-if [[ -n ${TMUX-} ]]; then
-  tap-widget() { tap pick; zle reset-prompt }
-  zle -N tap-widget
-  bindkey '^@' tap-widget
-fi
-```
+Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that invoke `tap state`. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
 
-or a tmux key:
+| Agent       | Integration                                | States                                     |
+| ----------- | ------------------------------------------ | ------------------------------------------ |
+| Claude Code | hook entries in `~/.claude/settings.json`  | running / idle / waiting / blocked         |
+| Codex       | hook entries in `~/.codex/hooks.json`      | running / idle / blocked; task from prompt |
+| pi          | extension dropped into pi's extensions dir | running / idle; task from prompt           |
 
-```tmux
-bind-key Space run-shell 'tap pick'
-```
+When no options are set (hooks not yet active), the picker falls back to parsing Claude Code's pane title, which carries a spinner glyph while working and `✳` when waiting.
 
-## The picker
+### State reporting
 
-```
-tap pick
-```
-
-- Type icons instead of a `session:window.pane` column: `❐` session pane, `⧉` persistent-popup pane (`popup_*` sessions); the full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
-- Agent icons: yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi.
-- State glyphs: green animated spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle.
-- The list live-refreshes 5×/second while open (embedded fzf's listen socket + an in-process goroutine), so states, tasks, and the spinner animate in place. `--track` pins your cursor across refreshes.
-- Keys: `Enter` switch to pane, `ctrl-a` toggle agents-only view, `?` toggle preview, `ctrl-x`/`ctrl-w`/`ctrl-q` kill pane/window/session (no confirmation).
-- The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
-
-## State reporting
-
-`tap state` is what the installed hooks call; you can also script it directly:
+`tap state` is what the installed hooks (and the pi extension) call — it is the only writer of the pane options. You can also script it directly:
 
 ```sh
 tap state running | idle | waiting | blocked # set @agent_state on $TMUX_PANE
 tap state notification                       # route a Notification payload from stdin
 tap state running --title-stdin              # also store the hook JSON's .prompt as @agent_task
+tap state running --title 'some task'        # also store free text as @agent_task
 tap state clear                              # unset both options
 ```
 
@@ -121,10 +126,10 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 ```sh
 nix develop # or direnv allow
 just build
-just check # vet + staticcheck + unit tests (race) + bats E2E + formatting
+just check # vet + staticcheck + unit tests (race) + bats E2E + formatting + versions
 ```
 
-E2E tests run against a scratch tmux server on a private socket; they never touch your real tmux server or agent configs.
+`flake.nix` is the version source of truth; after bumping it, run `just sync-versions` to mirror it into `package.json` and the plugin manifests. E2E tests run against a scratch tmux server on a private socket; they never touch your real tmux server or agent configs.
 
 ## License
 
