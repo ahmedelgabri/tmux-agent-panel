@@ -30,7 +30,7 @@
           default = self'.packages.tap;
           tap = pkgs.buildGoModule {
             pname = "tap";
-            version = "0.1.3";
+            version = "0.1.4";
 
             src = lib.cleanSource ./.;
 
