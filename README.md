@@ -22,8 +22,8 @@ When no options are set (hooks not yet active), the picker falls back to parsing
 # Homebrew
 brew install ahmedelgabri/tap/tmux-agent-panel
 
-# mise (prebuilt binary from GitHub releases via the ubi backend)
-mise use -g "ubi:ahmedelgabri/tmux-agent-panel[exe=tap]"
+# mise (prebuilt binary from GitHub releases)
+mise use github:ahmedelgabri/tmux-agent-panel
 
 # Nix
 nix run github:ahmedelgabri/tmux-agent-panel
@@ -36,7 +36,7 @@ Then wire the agent hooks — this is idempotent, backs up every file it touches
 
 ```sh
 tap install
-tap doctor      # verify the wiring
+tap doctor # verify the wiring
 ```
 
 `tap uninstall` removes exactly what `install` added and nothing else. Files managed by Nix/Home Manager (store symlinks) are refused with a pointer to declarative wiring instead.
@@ -97,10 +97,10 @@ tap pick
 `tap state` is what the installed hooks call; you can also script it directly:
 
 ```sh
-tap state running|idle|waiting|blocked   # set @agent_state on $TMUX_PANE
-tap state notification                   # route a Notification payload from stdin
-tap state running --title-stdin          # also store the hook JSON's .prompt as @agent_task
-tap state clear                          # unset both options
+tap state running | idle | waiting | blocked # set @agent_state on $TMUX_PANE
+tap state notification                       # route a Notification payload from stdin
+tap state running --title-stdin              # also store the hook JSON's .prompt as @agent_task
+tap state clear                              # unset both options
 ```
 
 Outside tmux every `state` invocation is a silent no-op, so hooks are safe to install unconditionally.
@@ -116,9 +116,9 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 ## Development
 
 ```sh
-nix develop      # or direnv allow
+nix develop # or direnv allow
 just build
-just check       # vet + staticcheck + unit tests (race) + bats E2E + formatting
+just check # vet + staticcheck + unit tests (race) + bats E2E + formatting
 ```
 
 E2E tests run against a scratch tmux server on a private socket; they never touch your real tmux server or agent configs.
