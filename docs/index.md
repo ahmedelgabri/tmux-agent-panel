@@ -7,7 +7,7 @@ title: tap
 
 An agent-aware tmux pane picker. `tap` lists every pane across all your tmux sessions in an fzf popup and shows, live, what your coding agents (Claude Code, Codex, pi) are doing in each of them: blocked on a permission request, waiting for your input, running, or idle — and what they're working on. Blocked agents sort first, so the pane that needs you is always at the top.
 
-<img width="1720" height="1055" alt="The tap picker: agent panes with live state glyphs sorted first, plain panes below" src="https://github.com/user-attachments/assets/42761dca-f216-45ae-a385-839cba365664" />
+<img alt="The tap picker: agent panes with live state glyphs sorted first, plain panes below" src="https://github.com/user-attachments/assets/42761dca-f216-45ae-a385-839cba365664" />
 
 fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
