@@ -9,6 +9,7 @@
 package panes
 
 import (
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,12 @@ import (
 )
 
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠇"}
+
+// CurrentPaneEnv carries the pane the picker was opened from. The picker
+// resolves it once before starting fzf — it cannot change while the popup
+// is open — and reload children inherit it, saving a tmux round trip on
+// every refresh tick.
+const CurrentPaneEnv = "TAP_CURRENT_PANE"
 
 // listFormat matches the field order Pane and BuildRows expect.
 const listFormat = "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{window_name}\t#{pane_current_command}\t#{pane_current_path}\t#{" + state.StateOption + "}\t#{" + state.TaskOption + "}\t#{pane_title}"
@@ -191,7 +198,10 @@ func List(agentsOnly bool, home string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	current, _ := tmux.Output("display-message", "-p", "#{pane_id}")
+	current := os.Getenv(CurrentPaneEnv)
+	if current == "" {
+		current, _ = tmux.Output("display-message", "-p", "#{pane_id}")
+	}
 	o := Options{
 		AgentsOnly:  agentsOnly,
 		Frame:       int(time.Now().UnixMicro() / 200000),

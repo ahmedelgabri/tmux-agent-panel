@@ -7,9 +7,11 @@
 // --in-popup` via `tmux display-popup -E` and the inner invocation runs fzf
 // plain, owning the whole popup.
 //
-// fzf listens on a Unix socket and an in-process goroutine POSTs a
-// transform action every 200ms, animating the running-state spinner and
-// keeping agent states live while the picker is open. --track pins the
+// fzf listens on a Unix socket and an in-process goroutine POSTs a reload
+// action every 200ms, animating the running-state spinner and keeping
+// agent states live while the picker is open. fzf exports FZF_PROMPT to
+// reload children, so `tap __list` derives the active view (all vs
+// agents-only) itself — no transform indirection needed. --track pins the
 // cursor across reloads.
 package picker
 
@@ -33,9 +35,11 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
 
+// Prompts double as the view state: transforms and reload children read
+// $FZF_PROMPT to tell the all-panes and agents-only views apart.
 const (
-	promptAll    = "» "
-	promptAgents = "agents » "
+	PromptAll    = "» "
+	PromptAgents = "agents » "
 )
 
 // Run shows the picker and switches to the chosen pane.
@@ -59,6 +63,12 @@ func Run(inPopup bool) error {
 	opts, err := fzf.ParseOptions(false, buildArgs(self, sock))
 	if err != nil {
 		return err
+	}
+
+	// The pane the picker was opened from cannot change while the popup is
+	// open; resolve it once and let every reload child inherit it.
+	if current, err := tmux.Output("display-message", "-p", "#{pane_id}"); err == nil {
+		os.Setenv(panes.CurrentPaneEnv, current)
 	}
 
 	home, _ := os.UserHomeDir()
@@ -121,7 +131,7 @@ func Run(inPopup bool) error {
 }
 
 func buildArgs(self, sock string) []string {
-	reload := fmt.Sprintf("transform:'%s' __reload", self)
+	reload := reloadAction(self)
 	return []string{
 		"--ansi",
 		"--reverse",
@@ -130,7 +140,7 @@ func buildArgs(self, sock string) []string {
 		"--with-nth", "3..",
 		"--track",
 		"--listen", sock,
-		"--prompt", promptAll,
+		"--prompt", PromptAll,
 		"--pointer", "▶",
 		"--info", "inline-right",
 		"--separator", "",
@@ -151,10 +161,16 @@ func buildArgs(self, sock string) []string {
 	}
 }
 
-// refreshLoop drives live updates: every 200ms it POSTs a transform action
-// to fzf's listen socket, which re-runs `tap __reload` and reloads the list
-// in whichever view (all/agents) is active. Dial errors are expected both
-// before fzf binds the socket and after it exits, so they are ignored.
+// reloadAction re-runs `tap __list`, which reads $FZF_PROMPT to preserve
+// whichever view (all/agents) is active. Both the kill bindings and the
+// refresh loop use it.
+func reloadAction(self string) string {
+	return fmt.Sprintf("reload('%s' __list)", self)
+}
+
+// refreshLoop drives live updates: every 200ms it POSTs a reload action to
+// fzf's listen socket. Dial errors are expected both before fzf binds the
+// socket and after it exits, so they are ignored.
 func refreshLoop(sock, self string, stop <-chan struct{}) {
 	client := &http.Client{
 		Timeout: time.Second,
@@ -165,7 +181,7 @@ func refreshLoop(sock, self string, stop <-chan struct{}) {
 			},
 		},
 	}
-	action := fmt.Sprintf("transform:'%s' __reload", self)
+	action := reloadAction(self)
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -181,21 +197,13 @@ func refreshLoop(sock, self string, stop <-chan struct{}) {
 	}
 }
 
-// TransformReload emits the fzf action that reloads the list, preserving
-// the current view. Meant to run as an fzf transform binding, which
-// provides $FZF_PROMPT.
-func TransformReload(self string) string {
-	if os.Getenv("FZF_PROMPT") == promptAll {
-		return fmt.Sprintf("reload('%s' __list)", self)
-	}
-	return fmt.Sprintf("reload('%s' __list --agents)", self)
-}
-
 // TransformToggle emits the fzf actions that flip between the all-panes and
-// agents-only views.
+// agents-only views. Meant to run as an fzf transform binding, which
+// provides $FZF_PROMPT. The reload passes the view explicitly rather than
+// relying on the prompt, which changes in the same action chain.
 func TransformToggle(self string) string {
-	if os.Getenv("FZF_PROMPT") == promptAll {
-		return fmt.Sprintf("change-prompt(%s)+reload('%s' __list --agents)", promptAgents, self)
+	if os.Getenv("FZF_PROMPT") == PromptAll {
+		return fmt.Sprintf("change-prompt(%s)+reload('%s' __list --agents)", PromptAgents, self)
 	}
-	return fmt.Sprintf("change-prompt(%s)+reload('%s' __list)", promptAll, self)
+	return fmt.Sprintf("change-prompt(%s)+reload('%s' __list)", PromptAll, self)
 }

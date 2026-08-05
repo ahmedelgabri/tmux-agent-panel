@@ -47,14 +47,12 @@ teardown() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"review the diff"* ]]
 	[[ "$output" != *"──── agents ────"* ]]
-}
 
-@test "__reload emits a reload action for the current view" {
-	FZF_PROMPT='» ' run "$TAP" __reload
+	# reload children get the view from FZF_PROMPT instead of a flag
+	FZF_PROMPT='agents » ' run "$TAP" __list
 	[ "$status" -eq 0 ]
-	[[ "$output" == "reload("*"__list)" ]]
-	FZF_PROMPT='agents » ' run "$TAP" __reload
-	[[ "$output" == *"__list --agents"* ]]
+	[[ "$output" == *"review the diff"* ]]
+	[[ "$output" != *"──── agents ────"* ]]
 }
 
 @test "__toggle flips between views" {
