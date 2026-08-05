@@ -78,9 +78,10 @@ func valid(name string) bool {
 // ("clear", or a concrete state — notification payloads resolve to
 // blocked/waiting). Outside tmux it is a no-op returning "": hooks fire for
 // agents running anywhere, but only tmux panes can display state. "clear"
-// unsets both options. With titleStdin, the hook JSON's .prompt becomes
-// @agent_task.
-func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
+// unsets both options. The task comes from title (normalized free text,
+// for programmatic callers like the pi extension) or, with titleStdin,
+// from the hook JSON's .prompt on stdin.
+func Set(st string, titleStdin bool, title string, stdin io.Reader) (string, error) {
 	pane := os.Getenv("TMUX_PANE")
 	if !tmux.InsideTmux() || pane == "" {
 		return "", nil
@@ -106,11 +107,13 @@ func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 		return "", fmt.Errorf("invalid state %q (want %s|notification|clear)", st, strings.Join(Names(), "|"))
 	}
 
+	task := NormalizeTask(title)
+	if task == "" && titleStdin {
+		task = TaskFromPrompt(payload)
+	}
 	args := []string{"set-option", "-p", "-t", pane, StateOption, st}
-	if titleStdin {
-		if task := TaskFromPrompt(payload); task != "" {
-			args = append(args, ";", "set-option", "-p", "-t", pane, TaskOption, task)
-		}
+	if task != "" {
+		args = append(args, ";", "set-option", "-p", "-t", pane, TaskOption, task)
 	}
 	if err := tmux.Run(args...); err != nil {
 		return "", err
@@ -133,14 +136,19 @@ func RouteNotification(payload []byte) string {
 	return "waiting"
 }
 
-// TaskFromPrompt extracts .prompt from hook JSON and normalizes it to a
-// single line of at most TaskMaxLength runes.
+// TaskFromPrompt extracts .prompt from hook JSON and normalizes it.
 func TaskFromPrompt(payload []byte) string {
 	var p struct {
 		Prompt string `json:"prompt"`
 	}
 	_ = json.Unmarshal(payload, &p)
-	line := p.Prompt
+	return NormalizeTask(p.Prompt)
+}
+
+// NormalizeTask reduces free text to a single line of at most
+// TaskMaxLength runes, fit for a picker row.
+func NormalizeTask(text string) string {
+	line := text
 	if i := strings.IndexAny(line, "\r\n"); i >= 0 {
 		line = line[:i]
 	}

@@ -8,9 +8,10 @@ import (
 )
 
 // pi has no hook config file; integration is an extension dropped into the
-// directory pi auto-discovers. The extension reports state itself (no
-// `tap state` calls), so it works even when tap moves. `/reload` inside pi
-// hot-loads it; otherwise it's picked up on the next session.
+// directory pi auto-discovers. The extension delegates to `tap state` on
+// PATH — the same writer every other channel uses — so the pane-option
+// protocol has one implementation. `/reload` inside pi hot-loads it;
+// otherwise it's picked up on the next session.
 //
 //go:embed pi_extension.ts
 var piExtension []byte

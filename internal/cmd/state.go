@@ -11,7 +11,10 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 )
 
-var titleStdin bool
+var (
+	titleStdin bool
+	titleText  string
+)
 
 var stateCmd = &cobra.Command{
 	Use:   "state <" + strings.Join(state.Names(), "|") + "|notification|clear>",
@@ -26,7 +29,7 @@ permission requests become blocked, everything else becomes waiting.
 'clear' unsets both options.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolved, err := state.Set(args[0], titleStdin, os.Stdin)
+		resolved, err := state.Set(args[0], titleStdin, titleText, os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -47,5 +50,7 @@ permission requests become blocked, everything else becomes waiting.
 func init() {
 	stateCmd.Flags().BoolVar(&titleStdin, "title-stdin", false,
 		"store the hook JSON's .prompt from stdin as the pane's @agent_task")
+	stateCmd.Flags().StringVar(&titleText, "title", "",
+		"store this text (normalized) as the pane's @agent_task")
 	rootCmd.AddCommand(stateCmd)
 }

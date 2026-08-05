@@ -47,6 +47,13 @@ teardown() {
 	[ "$output" = "fix the flaky test" ]
 }
 
+@test "title stores free text as @agent_task" {
+	run "$TAP" state running --title 'refactor the picker'
+	[ "$status" -eq 0 ]
+	run tmx show-options -pv -t "$TMUX_PANE" @agent_task
+	[ "$output" = "refactor the picker" ]
+}
+
 @test "invalid state fails" {
 	run "$TAP" state bogus
 	[ "$status" -ne 0 ]
