@@ -54,7 +54,7 @@ func TestInstallPreservesForeignHooks(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func TestInstallPreservesForeignHooks(t *testing.T) {
 	if !strings.Contains(string(raw), "log-event.sh SessionStart") {
 		t.Errorf("pre-existing hook was lost")
 	}
-	if !strings.Contains(string(raw), "/bin/tap state idle") {
+	if !strings.Contains(string(raw), "tap state idle") {
 		t.Errorf("tap hook missing")
 	}
 	if !hooksInstalled(path) {
@@ -82,11 +82,11 @@ func TestInstallIdempotent(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 	once, _ := os.ReadFile(path)
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 	twice, _ := os.ReadFile(path)
@@ -97,7 +97,7 @@ func TestInstallIdempotent(t *testing.T) {
 
 func TestInstallCreatesMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "hooks.json")
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 	m := read(t, path)
@@ -111,7 +111,7 @@ func TestUninstallRemovesOnlyOurs(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 	if err := uninstallHooks(path); err != nil {
@@ -132,17 +132,54 @@ func TestUninstallRemovesOnlyOurs(t *testing.T) {
 	}
 }
 
-func TestInstallRewritesPathButKeepsMarker(t *testing.T) {
+func TestInstallKeepsCommandsPathBased(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := installHooks(path, "/bin/tap", testHooks); err != nil {
+	if err := installHooks(path, testHooks); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	if strings.Contains(string(data), `"command": "tap state`) {
-		t.Errorf("installed commands must use the binary path, not bare `tap`:\n%s", data)
+	// Commands stay `tap ...` verbatim: absolute paths go stale when the
+	// binary moves (Nix store paths change every rebuild).
+	if !strings.Contains(string(data), `"command": "tap state idle"`) {
+		t.Errorf("command must invoke tap from PATH:\n%s", data)
 	}
-	if !strings.Contains(string(data), "/bin/tap state idle") {
-		t.Errorf("rewritten command missing:\n%s", data)
+}
+
+func TestInstallPreservesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real-settings.json")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(target, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := installHooks(link, testHooks); err != nil {
+		t.Fatal(err)
+	}
+
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("install replaced the symlink with a regular file")
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), Marker) {
+		t.Errorf("hooks must land in the symlink target:\n%s", data)
+	}
+
+	if err := uninstallHooks(link); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("uninstall replaced the symlink with a regular file")
 	}
 }
 
@@ -190,7 +227,7 @@ func TestRefusesInvalidJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", testHooks); err == nil {
+	if err := installHooks(path, testHooks); err == nil {
 		t.Errorf("install should refuse invalid JSON")
 	}
 	if err := uninstallHooks(path); err == nil {
@@ -203,7 +240,7 @@ func TestRefusesUnwritableFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o444); err != nil {
 		t.Fatal(err)
 	}
-	if err := installHooks(path, "/bin/tap", testHooks); err == nil {
+	if err := installHooks(path, testHooks); err == nil {
 		t.Errorf("install should refuse a read-only file")
 	}
 }
@@ -212,7 +249,7 @@ func TestPiInstallRoundtrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PI_CODING_AGENT_DIR", dir)
 
-	if err := installPi(""); err != nil {
+	if err := installPi(); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "extensions", "tap-agent-state.ts")

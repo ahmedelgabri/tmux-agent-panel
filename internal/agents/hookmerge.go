@@ -23,11 +23,21 @@ type pluginHooks struct {
 	Hooks map[string][]any `json:"hooks"`
 }
 
+// resolveTarget follows symlinks so writes land in the linked-to file.
+// Renaming over the symlink path itself would replace the link with a
+// regular file, silently detaching e.g. a dotfiles-managed settings.json.
+func resolveTarget(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
 // installHooks merges the hook groups from an embedded plugin hooks.json
-// into the JSON file at path, creating the file if it doesn't exist. The
-// plugin files invoke `tap` from PATH; installed hooks get the resolved
-// binary path instead so they keep working regardless of PATH.
-func installHooks(path, self string, hooksJSON []byte) error {
+// verbatim into the JSON file at path, creating the file if it doesn't
+// exist. Commands invoke `tap` from PATH — identical to the plugin channel,
+// and immune to the binary moving (Nix store paths change every rebuild).
+func installHooks(path string, hooksJSON []byte) error {
 	var plugin pluginHooks
 	if err := json.Unmarshal(hooksJSON, &plugin); err != nil {
 		return fmt.Errorf("parsing embedded plugin hooks: %w", err)
@@ -36,6 +46,7 @@ func installHooks(path, self string, hooksJSON []byte) error {
 	if err := checkWritable(path); err != nil {
 		return err
 	}
+	path = resolveTarget(path)
 
 	root := map[string]any{}
 	data, err := os.ReadFile(path)
@@ -62,35 +73,10 @@ func installHooks(path, self string, hooksJSON []byte) error {
 	for event, groups := range plugin.Hooks {
 		existing, _ := hooks[event].([]any)
 		// tap's groups never mix with user hooks, so removal stays surgical.
-		hooks[event] = append(removeMarked(existing), rewriteCommands(groups, self)...)
+		hooks[event] = append(removeMarked(existing), groups...)
 	}
 
 	return writeJSON(path, root)
-}
-
-// rewriteCommands swaps the plugin files' PATH-based `tap` invocation for
-// the installing binary's own path.
-func rewriteCommands(groups []any, self string) []any {
-	for _, g := range groups {
-		group, ok := g.(map[string]any)
-		if !ok {
-			continue
-		}
-		entries, ok := group["hooks"].([]any)
-		if !ok {
-			continue
-		}
-		for _, e := range entries {
-			entry, ok := e.(map[string]any)
-			if !ok {
-				continue
-			}
-			if cmd, _ := entry["command"].(string); strings.HasPrefix(cmd, "tap ") {
-				entry["command"] = self + strings.TrimPrefix(cmd, "tap")
-			}
-		}
-	}
-	return groups
 }
 
 // uninstallHooks removes every tap-owned entry from the file. Missing file
@@ -106,6 +92,7 @@ func uninstallHooks(path string) error {
 	if err := checkWritable(path); err != nil {
 		return err
 	}
+	path = resolveTarget(path)
 
 	root := map[string]any{}
 	if err := json.Unmarshal(data, &root); err != nil {

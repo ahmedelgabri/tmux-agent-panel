@@ -25,6 +25,13 @@ func Doctor() []Check {
 		checks = append(checks, Check{"tmux", false, "not found on PATH — tap cannot work without it"})
 	}
 
+	// Hooks and plugins invoke `tap` by name, so PATH is part of the contract.
+	if path, err := exec.LookPath("tap"); err == nil {
+		checks = append(checks, Check{"tap", true, path + " (hooks invoke it by name)"})
+	} else {
+		checks = append(checks, Check{"tap", false, "not on PATH — installed hooks and plugins invoke `tap` by name"})
+	}
+
 	for _, a := range All() {
 		path, err := a.ConfigPath()
 		if err != nil {

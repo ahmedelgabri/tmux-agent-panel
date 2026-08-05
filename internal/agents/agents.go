@@ -15,8 +15,8 @@ type Agent struct {
 	Name string
 	// ConfigPath is where the integration lives for this user.
 	ConfigPath func() (string, error)
-	// Install wires the hooks; self is the absolute tap binary path.
-	Install func(self string) error
+	// Install wires the hooks; they invoke `tap` from PATH.
+	Install func() error
 	// Uninstall removes only tap-owned pieces.
 	Uninstall func() error
 	// Installed reports whether tap's hooks are present.
@@ -55,15 +55,6 @@ func All() []Agent {
 func (a Agent) Detected() bool {
 	_, err := exec.LookPath(a.Name)
 	return err == nil
-}
-
-// Self resolves the running tap binary for embedding into hook commands.
-func Self() (string, error) {
-	self, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.EvalSymlinks(self)
 }
 
 func homePath(parts ...string) (string, error) {

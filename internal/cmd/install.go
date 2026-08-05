@@ -25,12 +25,8 @@ By default only agents whose binary is on PATH are wired; pass --claude,
 Manager are refused — wire those declaratively instead.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		self, err := agents.Self()
-		if err != nil {
-			return err
-		}
 		return forEachSelected(func(a agents.Agent) error {
-			return a.Install(self)
+			return a.Install()
 		}, "installed")
 	},
 }

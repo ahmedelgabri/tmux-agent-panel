@@ -16,12 +16,12 @@ func claudeSettingsPath() (string, error) {
 	}
 }
 
-func installClaude(self string) error {
+func installClaude() error {
 	path, err := claudeSettingsPath()
 	if err != nil {
 		return err
 	}
-	return installHooks(path, self, plugins.ClaudeHooks)
+	return installHooks(path, plugins.ClaudeHooks)
 }
 
 func uninstallClaude() error {

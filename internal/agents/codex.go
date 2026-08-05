@@ -17,12 +17,12 @@ func codexHooksPath() (string, error) {
 	return dir + "/hooks.json", nil
 }
 
-func installCodex(self string) error {
+func installCodex() error {
 	path, err := codexHooksPath()
 	if err != nil {
 		return err
 	}
-	return installHooks(path, self, plugins.CodexHooks)
+	return installHooks(path, plugins.CodexHooks)
 }
 
 func uninstallCodex() error {

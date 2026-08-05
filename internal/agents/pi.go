@@ -27,7 +27,7 @@ func piExtensionPath() (string, error) {
 	return filepath.Join(dir, "extensions", "tap-agent-state.ts"), nil
 }
 
-func installPi(_ string) error {
+func installPi() error {
 	path, err := piExtensionPath()
 	if err != nil {
 		return err

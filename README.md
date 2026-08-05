@@ -107,7 +107,8 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 
 ## Notes and caveats
 
-- `tap install` round-trips JSON configs through Go's encoder: key order and indentation are normalized. A backup (`*.tap.bak`) is written next to each file before the first modification.
+- `tap install` round-trips JSON configs through Go's encoder: key order and indentation are normalized. A backup (`*.tap.bak`) is written next to each file before the first modification. Symlinked config files are followed — writes land in the target and the symlink stays intact.
+- Installed hooks invoke `tap` from `PATH` (same commands the plugins ship), so upgrading or moving the binary never breaks them; `tap doctor` checks that `tap` is actually on `PATH`.
 - Claude's Notification routing matches English message text ("permission"); if the wording changes it degrades to `waiting`, never to a wrong `blocked`.
 - Codex fires `PermissionRequest` for auto-reviewed requests too (openai/codex#28833), so it can flash a false `blocked`; it self-corrects on the next `PreToolUse`. Codex loads hooks at session start only.
 - fzf is compiled in ([`github.com/junegunn/fzf/src`](https://github.com/junegunn/fzf)) — its version is pinned at build time, so no installed fzf is needed and no version skew is possible. fzf's Go library API is not covered by stability guarantees; upgrades are deliberate, tested events.
