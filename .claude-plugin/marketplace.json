@@ -1,19 +1,19 @@
 {
-	"name": "tmux-agent-panel",
-	"owner": {
-		"name": "Ahmed El Gabri",
-		"url": "https://github.com/ahmedelgabri"
-	},
-	"plugins": [
-		{
-			"name": "tap",
-			"source": "./plugins/tap-claude",
-			"description": "Report Claude Code activity into tmux pane options for the tap pane picker"
-		},
-		{
-			"name": "tap-codex",
-			"source": "./plugins/tap-codex",
-			"description": "Report Codex activity into tmux pane options for the tap pane picker"
-		}
-	]
+  "name": "tmux-agent-panel",
+  "owner": {
+    "name": "Ahmed El Gabri",
+    "url": "https://github.com/ahmedelgabri"
+  },
+  "plugins": [
+    {
+      "name": "tap",
+      "source": "./plugins/tap-claude",
+      "description": "Report Claude Code activity into tmux pane options for the tap pane picker"
+    },
+    {
+      "name": "tap-codex",
+      "source": "./plugins/tap-codex",
+      "description": "Report Codex activity into tmux pane options for the tap pane picker"
+    }
+  ]
 }

@@ -1,15 +1,21 @@
 {
-	"name": "tmux-agent-panel",
-	"version": "0.1.0",
-	"description": "Report coding-agent activity into tmux pane options for the tap pane picker",
-	"keywords": ["pi-package", "tmux", "tap"],
-	"license": "MIT",
-	"author": "Ahmed El Gabri (https://gabri.me)",
-	"repository": "github:ahmedelgabri/tmux-agent-panel",
-	"pi": {
-		"extensions": ["./extensions"]
-	},
-	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": "*"
-	}
+  "name": "tmux-agent-panel",
+  "version": "0.1.0",
+  "description": "Report coding-agent activity into tmux pane options for the tap pane picker",
+  "keywords": [
+    "pi-package",
+    "tmux",
+    "tap"
+  ],
+  "license": "MIT",
+  "author": "Ahmed El Gabri (https://gabri.me)",
+  "repository": "github:ahmedelgabri/tmux-agent-panel",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
 }

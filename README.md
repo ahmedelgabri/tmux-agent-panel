@@ -8,11 +8,11 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
 Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that `tap install` wires into each agent's own configuration. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
 
-| Agent       | Integration                                  | States                                     |
-| ----------- | -------------------------------------------- | ------------------------------------------ |
-| Claude Code | hook entries in `~/.claude/settings.json`    | running / idle / waiting / blocked         |
-| Codex       | hook entries in `~/.codex/hooks.json`        | running / idle / blocked; task from prompt |
-| pi          | extension dropped into pi's extensions dir   | running / idle; task from prompt           |
+| Agent       | Integration                                | States                                     |
+| ----------- | ------------------------------------------ | ------------------------------------------ |
+| Claude Code | hook entries in `~/.claude/settings.json`  | running / idle / waiting / blocked         |
+| Codex       | hook entries in `~/.codex/hooks.json`      | running / idle / blocked; task from prompt |
+| pi          | extension dropped into pi's extensions dir | running / idle; task from prompt           |
 
 When no options are set (hooks not yet active), the picker falls back to parsing Claude Code's pane title, which carries a spinner glyph while working and `✳` when waiting.
 
