@@ -20,9 +20,9 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       !contains(github.event.workflow_run.head_commit.message, '[skip release]')
     steps:
+      # Shallow checkout: this job only reads flake.nix and checks tags via
+      # ls-remote; the changelog job fetches full history itself.
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Get version from flake.nix
         id: version

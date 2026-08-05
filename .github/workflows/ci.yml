@@ -59,10 +59,7 @@ jobs:
             brew install bats-core tmux
           fi
 
-      - name: Run unit tests
-        run: just test
-
-      - name: Run race tests
+      - name: Run unit tests (race)
         run: just test-race
 
       - name: Run E2E tests

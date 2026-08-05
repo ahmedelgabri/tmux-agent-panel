@@ -3,15 +3,15 @@ default:
     @just --list
 
 # Build the binary
-build: clean
+build:
     go build -o tap ./cmd/tap/
 
 # Run Go unit tests
-test *args: build
+test *args:
     go test {{ args }} ./...
 
 # Run Go unit tests with race detector
-test-race *args: build
+test-race *args:
     go test -race {{ args }} ./...
 
 # Run E2E tests (bats)
