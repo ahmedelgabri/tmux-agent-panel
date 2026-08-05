@@ -3,7 +3,7 @@
 // command column, fed by the @agent_state/@agent_task pane options that the
 // agents set via hooks/extensions; which agent a pane runs is derived from
 // its current command. Agent rows sort first (blocked, waiting, running,
-// idle), separated from plain panes by divider rows. The `_shared` session
+// idle), separated from plain panes by a divider row. The `_shared` session
 // is skipped: its windows are linked into the named sessions, so listing it
 // would only duplicate rows.
 package panes
@@ -44,8 +44,8 @@ type Pane struct {
 }
 
 // Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
-// (used by --preview and the preview label). Divider rows have an empty
-// PaneID, making selecting them a no-op.
+// (used by --preview and the preview label). The divider row has an empty
+// PaneID, making selecting it a no-op and letting the focus binding skip it.
 type Row struct {
 	PaneID  string
 	Addr    string
@@ -166,17 +166,17 @@ func BuildRows(lines []string, o Options) []Row {
 
 	sort.SliceStable(agentRows, func(a, b int) bool { return agentRows[a].rank < agentRows[b].rank })
 
-	// Dividers only make sense when both groups are present.
-	divided := !o.AgentsOnly && agentCount > 0 && agentCount < len(entries)
-	rows := make([]Row, 0, len(entries)+2)
-	if divided {
-		rows = append(rows, Row{Display: ansi.Gray + "──── agents ────" + ansi.Reset})
-	}
+	// A single divider between the groups, only when both are present. It
+	// carries no words: the agent icons already announce their section, and
+	// wordless box-drawing keeps realistic search queries from matching it.
+	// Mid-list placement also means the picker never opens on it and the
+	// focus-skip binding can bounce off it in either direction.
+	rows := make([]Row, 0, len(entries)+1)
 	for _, a := range agentRows {
 		rows = append(rows, a.row)
 	}
-	if divided {
-		rows = append(rows, Row{Display: ansi.Gray + "──── panes ─────" + ansi.Reset})
+	if !o.AgentsOnly && agentCount > 0 && agentCount < len(entries) {
+		rows = append(rows, Row{Display: ansi.Gray + "────────────────" + ansi.Reset})
 	}
 	return append(rows, plainRows...)
 }

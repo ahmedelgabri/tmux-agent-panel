@@ -41,18 +41,18 @@ teardown() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"▲"* ]]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" == *"──── agents ────"* ]]
+	[[ "$output" == *"────────────────"* ]]
 
 	run "$TAP" __list --agents
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" != *"──── agents ────"* ]]
+	[[ "$output" != *"────────────────"* ]]
 
 	# reload children get the view from FZF_PROMPT instead of a flag
 	FZF_PROMPT='agents » ' run "$TAP" __list
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" != *"──── agents ────"* ]]
+	[[ "$output" != *"────────────────"* ]]
 }
 
 @test "__toggle flips between views" {

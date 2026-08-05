@@ -37,16 +37,19 @@ func TestAgentFor(t *testing.T) {
 
 func TestBuildRowsOrdering(t *testing.T) {
 	rows := BuildRows(fixture, Options{Home: "/Users/x"})
-	if len(rows) != 7 {
-		t.Fatalf("got %d rows, want 7 (5 panes + 2 dividers)", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("got %d rows, want 6 (5 panes + 1 divider)", len(rows))
 	}
-	// Agents divider, then blocked codex, running claude, idle pi, panes
-	// divider, then plain panes in original order.
-	wantIDs := []string{"", "%4", "%2", "%5", "", "%1", "%3"}
+	// Blocked codex, running claude, idle pi, the divider, then plain
+	// panes in original order.
+	wantIDs := []string{"%4", "%2", "%5", "", "%1", "%3"}
 	for i, want := range wantIDs {
 		if rows[i].PaneID != want {
 			t.Errorf("row %d: pane %q, want %q", i, rows[i].PaneID, want)
 		}
+	}
+	if !strings.Contains(rows[3].Display, "────") {
+		t.Errorf("row 3 should be the divider: %q", rows[3].Display)
 	}
 }
 
@@ -57,7 +60,7 @@ func TestBuildRowsAgentsOnly(t *testing.T) {
 	}
 	for _, r := range rows {
 		if r.PaneID == "" {
-			t.Errorf("agents-only view must not contain dividers")
+			t.Errorf("agents-only view must not contain the divider")
 		}
 	}
 }
