@@ -7,6 +7,8 @@ title: tap
 
 An agent-aware tmux pane picker. `tap` lists every pane across all your tmux sessions in an fzf popup and shows, live, what your coding agents (Claude Code, Codex, pi) are doing in each of them: blocked on a permission request, waiting for your input, running, or idle — and what they're working on. Blocked agents sort first, so the pane that needs you is always at the top.
 
+<img width="1720" height="1055" alt="The tap picker: agent panes with live state glyphs sorted first, plain panes below" src="https://github.com/user-attachments/assets/42761dca-f216-45ae-a385-839cba365664" />
+
 fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
 ## Features
@@ -14,6 +16,7 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 - **Live agent status** per pane: green spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle — refreshed 5×/second while the picker is open
 - **Blocked-first ordering** so permission requests surface immediately
 - **One-command hook installation** with `tap install`: idempotent, backed up, reversible with `tap uninstall`
+- **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)
 - **Embedded fzf** — no fzf installation, no version skew
 - **Agents-only view** (`ctrl-a`), pane preview (`?`), kill pane/window/session from the picker
 - **Diagnostics** with `tap doctor`
@@ -41,6 +44,21 @@ tap install
 tap doctor
 ```
 
+Or wire them through each agent's own package manager instead — the repo doubles as a plugin/package for all three:
+
+```bash
+# Claude Code
+/plugin marketplace add ahmedelgabri/tmux-agent-panel
+/plugin install tap@tmux-agent-panel
+
+# Codex (consumes Claude-compatible plugin marketplaces)
+codex plugin marketplace add https://github.com/ahmedelgabri/tmux-agent-panel
+codex plugin add tap-codex@tmux-agent-panel
+
+# pi (the repo is the pi-tmux-agent-panel package)
+pi install https://github.com/ahmedelgabri/tmux-agent-panel
+```
+
 Open the picker from any shell inside tmux:
 
 ```bash
@@ -59,7 +77,7 @@ fi
 
 ## How it works
 
-Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that `tap install` wires into each agent's own configuration. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
+Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that invoke `tap state` — the single writer of the protocol across all three agents. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
 
 | Agent       | Integration                                | States                                     |
 | ----------- | ------------------------------------------ | ------------------------------------------ |

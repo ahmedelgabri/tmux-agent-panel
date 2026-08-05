@@ -77,7 +77,7 @@ Instead of `tap install` editing config files, the repo doubles as a plugin/pack
 codex plugin marketplace add https://github.com/ahmedelgabri/tmux-agent-panel
 codex plugin add tap-codex@tmux-agent-panel
 
-# pi (repo is a pi package; extensions/ is auto-discovered)
+# pi (the repo is the pi-tmux-agent-panel package; extensions/ is auto-discovered)
 pi install https://github.com/ahmedelgabri/tmux-agent-panel
 
 # or try it for one run without installing
