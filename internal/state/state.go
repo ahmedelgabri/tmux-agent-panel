@@ -87,9 +87,11 @@ func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 	}
 
 	if st == "clear" {
-		// Unset fails when the option was never set; that is fine.
-		_ = tmux.Run("set-option", "-pu", "-t", pane, StateOption)
-		_ = tmux.Run("set-option", "-pu", "-t", pane, TaskOption)
+		// One tmux invocation for both options; a `;` argument separates
+		// tmux commands, and the second runs even if the first fails
+		// because an option was never set.
+		_ = tmux.Run("set-option", "-pu", "-t", pane, StateOption, ";",
+			"set-option", "-pu", "-t", pane, TaskOption)
 		return "clear", nil
 	}
 
@@ -104,16 +106,14 @@ func Set(st string, titleStdin bool, stdin io.Reader) (string, error) {
 		return "", fmt.Errorf("invalid state %q (want %s|notification|clear)", st, strings.Join(Names(), "|"))
 	}
 
-	if err := tmux.Run("set-option", "-p", "-t", pane, StateOption, st); err != nil {
-		return "", err
-	}
-
+	args := []string{"set-option", "-p", "-t", pane, StateOption, st}
 	if titleStdin {
 		if task := TaskFromPrompt(payload); task != "" {
-			if err := tmux.Run("set-option", "-p", "-t", pane, TaskOption, task); err != nil {
-				return "", err
-			}
+			args = append(args, ";", "set-option", "-p", "-t", pane, TaskOption, task)
 		}
+	}
+	if err := tmux.Run(args...); err != nil {
+		return "", err
 	}
 	return st, nil
 }
