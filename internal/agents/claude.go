@@ -1,6 +1,10 @@
 package agents
 
-import "github.com/ahmedelgabri/tmux-agent-panel/plugins"
+import (
+	"path/filepath"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/plugins"
+)
 
 // The hook set lives in plugins/tap-claude/hooks/hooks.json — the same file
 // the Claude Code plugin ships — so both install channels stay identical.
@@ -9,30 +13,11 @@ import "github.com/ahmedelgabri/tmux-agent-panel/plugins"
 // parses that instead.
 
 func claudeSettingsPath() (string, error) {
-	if dir, err := envOrHome("CLAUDE_CONFIG_DIR", ".claude"); err == nil {
-		return dir + "/settings.json", nil
-	} else {
+	dir, err := envOrHome("CLAUDE_CONFIG_DIR", ".claude")
+	if err != nil {
 		return "", pathErr("claude", err)
 	}
+	return filepath.Join(dir, "settings.json"), nil
 }
 
-func installClaude() error {
-	path, err := claudeSettingsPath()
-	if err != nil {
-		return err
-	}
-	return installHooks(path, plugins.ClaudeHooks)
-}
-
-func uninstallClaude() error {
-	path, err := claudeSettingsPath()
-	if err != nil {
-		return err
-	}
-	return uninstallHooks(path)
-}
-
-func claudeInstalled() bool {
-	path, err := claudeSettingsPath()
-	return err == nil && hooksInstalled(path)
-}
+var installClaude, uninstallClaude, claudeInstalled = jsonHookFuncs(claudeSettingsPath, plugins.ClaudeHooks)

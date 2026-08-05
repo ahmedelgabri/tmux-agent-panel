@@ -18,6 +18,31 @@ import (
 // Marker identifies hook entries owned by tap inside foreign config files.
 const Marker = "tap state"
 
+// jsonHookFuncs wires the shared install flow for agents whose integration
+// is a JSON hooks file (Claude, Codex): resolve the config path, then
+// merge/strip/detect tap's embedded hook set.
+func jsonHookFuncs(pathFn func() (string, error), hooks []byte) (install, uninstall func() error, installed func() bool) {
+	install = func() error {
+		path, err := pathFn()
+		if err != nil {
+			return err
+		}
+		return installHooks(path, hooks)
+	}
+	uninstall = func() error {
+		path, err := pathFn()
+		if err != nil {
+			return err
+		}
+		return uninstallHooks(path)
+	}
+	installed = func() bool {
+		path, err := pathFn()
+		return err == nil && hooksInstalled(path)
+	}
+	return install, uninstall, installed
+}
+
 // pluginHooks is the shape of an embedded plugin hooks.json.
 type pluginHooks struct {
 	Hooks map[string][]any `json:"hooks"`
@@ -151,7 +176,7 @@ func removeMarked(groups []any) []any {
 			}
 			kept = append(kept, e)
 		}
-		if len(kept) == 0 && len(entries) > 0 && len(kept) != len(entries) {
+		if len(kept) == 0 && len(entries) > 0 {
 			continue
 		}
 		group["hooks"] = kept

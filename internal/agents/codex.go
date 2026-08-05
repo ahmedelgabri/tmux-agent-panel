@@ -1,6 +1,10 @@
 package agents
 
-import "github.com/ahmedelgabri/tmux-agent-panel/plugins"
+import (
+	"path/filepath"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/plugins"
+)
 
 // The hook set lives in plugins/tap-codex/hooks/hooks.json — the same file
 // the Codex plugin ships — so both install channels stay identical. Codex
@@ -14,26 +18,7 @@ func codexHooksPath() (string, error) {
 	if err != nil {
 		return "", pathErr("codex", err)
 	}
-	return dir + "/hooks.json", nil
+	return filepath.Join(dir, "hooks.json"), nil
 }
 
-func installCodex() error {
-	path, err := codexHooksPath()
-	if err != nil {
-		return err
-	}
-	return installHooks(path, plugins.CodexHooks)
-}
-
-func uninstallCodex() error {
-	path, err := codexHooksPath()
-	if err != nil {
-		return err
-	}
-	return uninstallHooks(path)
-}
-
-func codexInstalled() bool {
-	path, err := codexHooksPath()
-	return err == nil && hooksInstalled(path)
-}
+var installCodex, uninstallCodex, codexInstalled = jsonHookFuncs(codexHooksPath, plugins.CodexHooks)
