@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
@@ -67,14 +68,10 @@ func ParsePane(line string) (Pane, bool) {
 }
 
 // AgentFor maps a pane's current command to an agent name, or "" for plain
-// panes. Home Manager wraps binaries, so agents can show up as e.g.
-// ".claude-wrapped" — strip the wrapper to detect them.
+// panes.
 func AgentFor(command string) string {
-	c := strings.TrimPrefix(command, ".")
-	c = strings.TrimSuffix(c, "-wrapped")
-	switch c {
-	case "claude", "codex", "pi":
-		return c
+	if a, ok := agents.ForCommand(command); ok {
+		return a.Name
 	}
 	return ""
 }
@@ -82,19 +79,20 @@ func AgentFor(command string) string {
 // BuildRows renders panes into sorted picker rows, dividers included.
 func BuildRows(lines []string, o Options) []Row {
 	type entry struct {
-		pane  Pane
-		agent string
+		pane    Pane
+		meta    agents.Agent
+		isAgent bool
 	}
 	var entries []entry
-	winWidth, cmdWidth, agents := 0, 0, 0
+	winWidth, cmdWidth, agentCount := 0, 0, 0
 
 	for _, line := range lines {
 		p, ok := ParsePane(line)
 		if !ok {
 			continue
 		}
-		agent := AgentFor(p.Command)
-		if o.AgentsOnly && agent == "" {
+		meta, isAgent := agents.ForCommand(p.Command)
+		if o.AgentsOnly && !isAgent {
 			continue
 		}
 		if o.Home != "" && strings.HasPrefix(p.Path, o.Home) {
@@ -103,14 +101,14 @@ func BuildRows(lines []string, o Options) []Row {
 		if w := len([]rune(p.Window)); w > winWidth {
 			winWidth = w
 		}
-		if agent == "" {
+		if isAgent {
+			agentCount++
+		} else {
 			if w := len([]rune(p.Command)); w > cmdWidth {
 				cmdWidth = w
 			}
-		} else {
-			agents++
 		}
-		entries = append(entries, entry{p, agent})
+		entries = append(entries, entry{p, meta, isAgent})
 	}
 
 	spinner := spinnerFrames[o.Frame%len(spinnerFrames)]
@@ -130,24 +128,22 @@ func BuildRows(lines []string, o Options) []Row {
 		lead := mark + " " + ansi.Gray + paneType + ansi.Reset + "  " + pad(p.Window, winWidth) + "  "
 
 		var key, display string
-		if e.agent != "" {
+		if e.isAgent {
 			st := p.State
 			title := p.Task
-			// Claude publishes a live task summary in the pane title
-			// (behind a status glyph) — better than the raw prompt, so
-			// state hooks don't store a task for it and the glyph is
-			// dropped here instead.
-			if title == "" && e.agent == "claude" {
+			// The task lives in the pane title for TaskFromTitle agents;
+			// the leading status glyph is dropped here.
+			if title == "" && e.meta.TaskFromTitle {
 				title = stripFirstWord(p.Title)
 			}
 			if st == "" {
-				st = fallbackState(e.agent, p.Title)
+				st = fallbackState(e.meta, p.Title)
 			}
 			if r := []rune(title); len(r) > state.TaskMaxLength {
 				title = string(r[:state.TaskMaxLength-1]) + "…"
 			}
 			key = fmt.Sprintf("1%d%06d", state.ByName(st).Rank, i)
-			display = lead + agentIcon(e.agent) + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
+			display = lead + e.meta.Icon + "  " + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
 		} else {
 			key = fmt.Sprintf("3%07d", i)
 			display = lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + "  " + ansi.Gray + p.Path + ansi.Reset
@@ -156,7 +152,7 @@ func BuildRows(lines []string, o Options) []Row {
 	}
 
 	// Dividers only make sense when both groups are present.
-	if !o.AgentsOnly && agents > 0 && agents < len(entries) {
+	if !o.AgentsOnly && agentCount > 0 && agentCount < len(entries) {
 		rows = append(
 			rows,
 			Row{Key: "0", Display: ansi.Gray + "──── agents ────" + ansi.Reset},
@@ -202,18 +198,6 @@ func pad(s string, width int) string {
 	return s
 }
 
-// Per-agent icon in a distinct ANSI slot: Claude yellow (closest named slot
-// to its orange), Codex cyan, pi magenta.
-func agentIcon(agent string) string {
-	switch agent {
-	case "claude":
-		return ansi.Yellow + "✳" + ansi.Reset
-	case "codex":
-		return ansi.Cyan + "⌬" + ansi.Reset
-	}
-	return ansi.Magenta + "π" + ansi.Reset
-}
-
 func stateGlyph(st, spinner string) string {
 	d := state.ByName(st)
 	glyph := d.Glyph
@@ -225,10 +209,10 @@ func stateGlyph(st, spinner string) string {
 	return d.Color + glyph + ansi.Reset
 }
 
-// Claude Code prefixes its pane title with a spinner glyph while working
-// and ✳ when waiting; use that until hooks set the option.
-func fallbackState(agent, title string) string {
-	if agent != "claude" {
+// TaskFromTitle agents prefix their pane title with a spinner glyph while
+// working and ✳ when waiting; use that until hooks set the option.
+func fallbackState(a agents.Agent, title string) string {
+	if !a.TaskFromTitle {
 		return "idle"
 	}
 	first, _, _ := strings.Cut(title, " ")
