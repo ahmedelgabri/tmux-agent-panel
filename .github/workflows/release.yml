@@ -142,6 +142,12 @@ jobs:
 
             ## Installation
 
+            ### Using Homebrew
+
+            ```bash
+            brew install ahmedelgabri/tap/tmux-agent-panel
+            ```
+
             ### Using Nix Flakes
 
             ```bash
@@ -165,3 +171,61 @@ jobs:
           files: |
             dist/tap-*.tar.gz
             dist/tap-*-checksums.txt
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ahmedelgabri/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Download checksums
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v${VERSION}" \
+            --repo ahmedelgabri/tmux-agent-panel \
+            --pattern "*checksums.txt" \
+            --dir .
+
+      - name: Update formula
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          OLD_VERSION=$(sed -nE 's|.*/releases/download/v([^/]+)/.*|\1|p' Formula/tmux-agent-panel.rb | head -n1)
+          sed -i "s/${OLD_VERSION//./\\.}/${VERSION}/g" Formula/tmux-agent-panel.rb
+
+          DARWIN_AMD64=$(grep "darwin-amd64" "tap-${VERSION}-checksums.txt" | awk '{print $1}')
+          DARWIN_ARM64=$(grep "darwin-arm64" "tap-${VERSION}-checksums.txt" | awk '{print $1}')
+          LINUX_AMD64=$(grep "linux-amd64" "tap-${VERSION}-checksums.txt" | awk '{print $1}')
+          LINUX_ARM64=$(grep "linux-arm64" "tap-${VERSION}-checksums.txt" | awk '{print $1}')
+
+          awk -v da="$DARWIN_AMD64" -v darm="$DARWIN_ARM64" \
+              -v la="$LINUX_AMD64" -v larm="$LINUX_ARM64" '
+          /darwin-amd64/ { platform = "da" }
+          /darwin-arm64/ { platform = "darm" }
+          /linux-amd64/ { platform = "la" }
+          /linux-arm64/ { platform = "larm" }
+          /sha256/ && platform {
+            hash = (platform == "da") ? da : (platform == "darm") ? darm : (platform == "la") ? la : larm
+            sub(/"[^"]*"/, "\"" hash "\"")
+            platform = ""
+          }
+          { print }
+          ' Formula/tmux-agent-panel.rb > tmp && mv tmp Formula/tmux-agent-panel.rb
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/tmux-agent-panel.rb
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "chore: bump tmux-agent-panel to v${VERSION}"
+          git push
