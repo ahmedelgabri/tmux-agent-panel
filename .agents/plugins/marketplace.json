@@ -1,0 +1,20 @@
+{
+  "name": "tmux-agent-panel",
+  "interface": {
+    "displayName": "Tmux Agent Panel"
+  },
+  "plugins": [
+    {
+      "name": "tap-codex",
+      "source": {
+        "source": "local",
+        "path": "./plugins/tap-codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
