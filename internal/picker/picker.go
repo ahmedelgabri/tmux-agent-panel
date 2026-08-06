@@ -139,6 +139,8 @@ func buildArgs(self, sock string) []string {
 		"--delimiter", "\t",
 		"--with-nth", "3..",
 		"--track",
+		"--gutter", " ",
+		"--gutter-raw", " ",
 		"--listen", sock,
 		"--prompt", PromptAll,
 		"--pointer", "▶",
