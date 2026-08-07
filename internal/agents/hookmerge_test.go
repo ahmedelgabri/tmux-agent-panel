@@ -95,6 +95,49 @@ func TestInstallIdempotent(t *testing.T) {
 	}
 }
 
+func TestInstallPreservesFormattingAndRoundTrips(t *testing.T) {
+	// Deliberately non-alphabetical keys, two-space indent, and characters
+	// encoding/json would re-escape — everything the old map round-trip
+	// used to normalize.
+	const spaced = `{
+  "zeta": "é <ok>",
+  "theme": "auto",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {"type": "command", "command": "~/.claude/hooks/log-event.sh", "async": true}
+        ]
+      }
+    ]
+  }
+}
+`
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(spaced), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installHooks(path, testHooks); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "\"zeta\": \"é <ok>\",\n  \"theme\": \"auto\",") {
+		t.Errorf("user content must keep its exact bytes:\n%s", data)
+	}
+	if !strings.Contains(string(data), "tap state idle") {
+		t.Errorf("tap hook missing:\n%s", data)
+	}
+
+	if err := uninstallHooks(path); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != spaced {
+		t.Errorf("install+uninstall must restore the original bytes:\n%s", after)
+	}
+}
+
 func TestInstallCreatesMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "hooks.json")
 	if err := installHooks(path, testHooks); err != nil {

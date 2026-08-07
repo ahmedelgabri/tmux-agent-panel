@@ -3,16 +3,21 @@
 // their command string, which makes install idempotent (remove ours, then
 // re-add) and uninstall surgical (everything else is preserved).
 //
-// Round-tripping through encoding/json normalizes key order and indentation;
-// a backup is written next to the file before the first modification.
+// Edits are spliced into the original bytes with sjson/gjson so user
+// content keeps its exact key order, indentation, and escapes; a backup is
+// written next to the file before the first modification.
 package agents
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // Marker identifies hook entries owned by tap inside foreign config files.
@@ -58,9 +63,11 @@ func resolveTarget(path string) string {
 	return path
 }
 
-// installHooks merges the hook groups from an embedded plugin hooks.json
+// installHooks splices the hook groups from an embedded plugin hooks.json
 // verbatim into the JSON file at path, creating the file if it doesn't
-// exist. Commands invoke `tap` from PATH — identical to the plugin channel,
+// exist. Existing content is preserved byte-for-byte — round-tripping the
+// document through Go maps would sort every key and re-indent the file.
+// Commands invoke `tap` from PATH — identical to the plugin channel,
 // and immune to the binary moving (Nix store paths change every rebuild).
 func installHooks(path string, hooksJSON []byte) error {
 	var plugin pluginHooks
@@ -73,35 +80,49 @@ func installHooks(path string, hooksJSON []byte) error {
 	}
 	path = resolveTarget(path)
 
-	root := map[string]any{}
 	data, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		if err := json.Unmarshal(data, &root); err != nil {
-			return fmt.Errorf("%s: not valid JSON, refusing to modify: %w", path, err)
-		}
-		if err := backup(path, data); err != nil {
-			return err
-		}
 	case os.IsNotExist(err):
-		// A fresh file gets created below.
+		// A fresh file has no formatting to preserve; write the canonical
+		// tab-indented layout.
+		return writeJSON(path, map[string]any{"hooks": plugin.Hooks})
 	default:
 		return err
 	}
 
-	hooks, ok := root["hooks"].(map[string]any)
-	if !ok {
-		hooks = map[string]any{}
-		root["hooks"] = hooks
+	if !gjson.ValidBytes(data) || !gjson.ParseBytes(data).IsObject() {
+		return fmt.Errorf("%s: not a valid JSON object, refusing to modify", path)
+	}
+	if err := backup(path, data); err != nil {
+		return err
 	}
 
-	for event, groups := range plugin.Hooks {
-		existing, _ := hooks[event].([]any)
+	doc := string(data)
+	var spliceErr error
+	gjson.GetBytes(hooksJSON, "hooks").ForEach(func(event, groups gjson.Result) bool {
+		eventPath := "hooks." + event.String()
 		// tap's groups never mix with user hooks, so removal stays surgical.
-		hooks[event] = append(removeMarked(existing), groups...)
+		doc = stripMarked(doc, eventPath)
+		for _, g := range groups.Array() {
+			// Compacting keeps the embedded key order but drops its
+			// indentation: a multi-line splice would not survive the
+			// remove-then-append cycle byte-exact, compact one-liners do.
+			var compact bytes.Buffer
+			if spliceErr = json.Compact(&compact, []byte(g.Raw)); spliceErr != nil {
+				return false
+			}
+			if doc, spliceErr = sjson.SetRaw(doc, eventPath+".-1", compact.String()); spliceErr != nil {
+				return false
+			}
+		}
+		return true
+	})
+	if spliceErr != nil {
+		return spliceErr
 	}
 
-	return writeJSON(path, root)
+	return writeFileAtomic(path, []byte(doc))
 }
 
 // uninstallHooks removes every tap-owned entry from the file. Missing file
@@ -119,29 +140,34 @@ func uninstallHooks(path string) error {
 	}
 	path = resolveTarget(path)
 
-	root := map[string]any{}
-	if err := json.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("%s: not valid JSON, refusing to modify: %w", path, err)
+	if !gjson.ValidBytes(data) {
+		return fmt.Errorf("%s: not valid JSON, refusing to modify", path)
 	}
-	hooks, ok := root["hooks"].(map[string]any)
-	if !ok {
+	hooks := gjson.GetBytes(data, "hooks")
+	if !hooks.IsObject() {
 		return nil
 	}
 	if err := backup(path, data); err != nil {
 		return err
 	}
 
-	for event, v := range hooks {
-		groups, _ := v.([]any)
-		groups = removeMarked(groups)
-		if len(groups) == 0 {
-			delete(hooks, event)
-		} else {
-			hooks[event] = groups
+	var events []string
+	hooks.ForEach(func(event, _ gjson.Result) bool {
+		events = append(events, event.String())
+		return true
+	})
+	doc := string(data)
+	for _, event := range events {
+		eventPath := "hooks." + event
+		doc = stripMarked(doc, eventPath)
+		// An event emptied by the removal is dropped, matching install,
+		// which only ever adds whole groups.
+		if len(gjson.Get(doc, eventPath).Array()) == 0 {
+			doc, _ = sjson.Delete(doc, eventPath)
 		}
 	}
 
-	return writeJSON(path, root)
+	return writeFileAtomic(path, []byte(doc))
 }
 
 // hooksInstalled reports whether the file contains any tap-owned entry.
@@ -150,39 +176,34 @@ func hooksInstalled(path string) bool {
 	return err == nil && strings.Contains(string(data), Marker)
 }
 
-// removeMarked drops tap-owned entries from each matcher group, and drops
-// groups that only contained tap entries. Groups untouched by tap pass
-// through unchanged.
-func removeMarked(groups []any) []any {
-	var out []any
-	for _, g := range groups {
-		group, ok := g.(map[string]any)
-		if !ok {
-			out = append(out, g)
-			continue
-		}
-		entries, ok := group["hooks"].([]any)
-		if !ok {
-			out = append(out, g)
-			continue
-		}
-		var kept []any
+// stripMarked deletes tap-owned entries under the given event path, and
+// drops groups that only contained tap entries. Groups untouched by tap
+// keep their exact bytes. Deletions walk backwards so the indexes of
+// earlier siblings stay valid.
+func stripMarked(doc, eventPath string) string {
+	groups := gjson.Get(doc, eventPath).Array()
+	for gi := len(groups) - 1; gi >= 0; gi-- {
+		entries := groups[gi].Get("hooks").Array()
+		marked := 0
 		for _, e := range entries {
-			entry, ok := e.(map[string]any)
-			if ok {
-				if cmd, _ := entry["command"].(string); strings.Contains(cmd, Marker) {
-					continue
-				}
+			if strings.Contains(e.Get("command").String(), Marker) {
+				marked++
 			}
-			kept = append(kept, e)
 		}
-		if len(kept) == 0 && len(entries) > 0 {
+		if marked == 0 {
 			continue
 		}
-		group["hooks"] = kept
-		out = append(out, group)
+		if marked == len(entries) {
+			doc, _ = sjson.Delete(doc, fmt.Sprintf("%s.%d", eventPath, gi))
+			continue
+		}
+		for ei := len(entries) - 1; ei >= 0; ei-- {
+			if strings.Contains(entries[ei].Get("command").String(), Marker) {
+				doc, _ = sjson.Delete(doc, fmt.Sprintf("%s.%d.hooks.%d", eventPath, gi, ei))
+			}
+		}
 	}
-	return out
+	return doc
 }
 
 // checkWritable refuses to touch files managed by Nix/Home Manager — those
@@ -208,14 +229,17 @@ func backup(path string, data []byte) error {
 }
 
 func writeJSON(path string, root map[string]any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	out, err := json.MarshalIndent(root, "", "\t")
 	if err != nil {
 		return err
 	}
-	out = append(out, '\n')
+	return writeFileAtomic(path, append(out, '\n'))
+}
+
+func writeFileAtomic(path string, out []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tap-*")
 	if err != nil {
 		return err

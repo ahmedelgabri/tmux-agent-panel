@@ -44,6 +44,18 @@ setup() {
 	grep -q '"theme": "auto"' "$CLAUDE_CONFIG_DIR/settings.json.tap.bak"
 }
 
+@test "install preserves user formatting byte-for-byte" {
+	printf '{\n  "theme": "auto",\n  "hooks": {\n    "SessionStart": [\n      {"hooks": [{"type": "command", "command": "echo hi", "async": true}]}\n    ]\n  }\n}\n' >"$CLAUDE_CONFIG_DIR/settings.json"
+	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/original.json"
+
+	"$TAP" install --claude
+	grep -q '"theme": "auto",' "$CLAUDE_CONFIG_DIR/settings.json"
+	grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+
+	"$TAP" uninstall --claude
+	diff "$BATS_TEST_TMPDIR/original.json" "$CLAUDE_CONFIG_DIR/settings.json"
+}
+
 @test "doctor reports wiring status" {
 	"$TAP" install --claude --codex --pi
 	run "$TAP" doctor
