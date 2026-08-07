@@ -1,7 +1,7 @@
 {
   "name": "tap-codex",
   "description": "Report Codex activity into tmux pane options for the tap pane picker",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "author": {
     "name": "Ahmed El Gabri",
     "url": "https://github.com/ahmedelgabri"
