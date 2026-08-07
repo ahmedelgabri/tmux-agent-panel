@@ -7,6 +7,7 @@ import (
 
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
 )
 
 var doctorCmd = &cobra.Command{
@@ -14,8 +15,23 @@ var doctorCmd = &cobra.Command{
 	Short: "Check tap's runtime dependencies and hook wiring",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		checks := agents.Doctor()
+		// Orphaned agent state is runtime breakage the config checks can't
+		// see; a Fetch error just means no tmux server to scan.
+		if ps, err := panes.Fetch(); err == nil {
+			for _, p := range ps {
+				if panes.Orphaned(p) {
+					checks = append(checks, agents.Check{
+						Name: "pane",
+						OK:   false,
+						Detail: fmt.Sprintf("%s (%s): @agent_state=%s but no agent identity — hooks not passing --agent, or stale options (run `tap state clear` in that pane)",
+							p.ID, p.Addr, p.State),
+					})
+				}
+			}
+		}
 		failed := false
-		for _, c := range agents.Doctor() {
+		for _, c := range checks {
 			mark := colorize(ansi.Green, "✓")
 			detail := colorize(ansi.Gray, c.Detail)
 			if !c.OK {

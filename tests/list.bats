@@ -71,6 +71,18 @@ teardown() {
 	[[ "$output" == *"▲"* ]]
 }
 
+@test "doctor flags panes with orphaned agent state" {
+	tmx new-window -t main -n orphanwin "bash -c 'read x'"
+	sleep 0.5
+	pane="$(tmx display-message -t main:orphanwin -p '#{pane_id}')"
+	tmx set-option -p -t "$pane" @agent_state running
+
+	run "$TAP" doctor
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"$pane"* ]]
+	[[ "$output" == *"no agent identity"* ]]
+}
+
 @test "__toggle flips between views" {
 	FZF_PROMPT='» ' run "$TAP" __toggle
 	[ "$status" -eq 0 ]

@@ -35,6 +35,24 @@ func TestAgentFor(t *testing.T) {
 	}
 }
 
+func TestOrphaned(t *testing.T) {
+	cases := []struct {
+		pane Pane
+		want bool
+	}{
+		{Pane{Command: "zsh", State: "running"}, true},
+		{Pane{Command: "node", State: "blocked", Agent: "bogus"}, true},
+		{Pane{Command: "zsh"}, false},
+		{Pane{Command: "claude", State: "running"}, false},
+		{Pane{Command: "node", State: "running", Agent: "claude"}, false},
+	}
+	for _, c := range cases {
+		if got := Orphaned(c.pane); got != c.want {
+			t.Errorf("Orphaned(%+v) = %v, want %v", c.pane, got, c.want)
+		}
+	}
+}
+
 func TestAgentNameOverride(t *testing.T) {
 	// @agent_name marks a pane whose command misreports (here: node) as an
 	// agent row.

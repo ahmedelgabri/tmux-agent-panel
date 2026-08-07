@@ -84,6 +84,21 @@ func AgentFor(command string) string {
 	return ""
 }
 
+// Orphaned reports whether a pane records agent state without a resolvable
+// agent identity: hooks that don't pass --agent, or options gone stale
+// after an unclean agent exit. The picker warns about such panes and
+// doctor explains them; neither guesses an agent.
+func Orphaned(p Pane) bool {
+	if p.State == "" {
+		return false
+	}
+	if _, ok := agents.ByName(p.Agent); ok {
+		return false
+	}
+	_, ok := agents.ForCommand(p.Command)
+	return !ok
+}
+
 // BuildRows renders panes into sorted picker rows, dividers included.
 func BuildRows(lines []string, o Options) []Row {
 	type entry struct {
@@ -204,10 +219,29 @@ func Render(rows []Row) string {
 	return b.String()
 }
 
+func listOutput() (string, error) {
+	return tmux.Output("list-panes", "-a", "-f", "#{!=:#{session_name},_shared}", "-F", listFormat)
+}
+
+// Fetch lists panes tmux-wide in parsed form.
+func Fetch() ([]Pane, error) {
+	out, err := listOutput()
+	if err != nil {
+		return nil, err
+	}
+	var ps []Pane
+	for _, l := range strings.Split(out, "\n") {
+		if p, ok := ParsePane(l); ok {
+			ps = append(ps, p)
+		}
+	}
+	return ps, nil
+}
+
 // List shells out to tmux and renders the current rows. The spinner frame
 // comes from a 200ms clock so consecutive reloads animate it.
 func List(agentsOnly bool, home string) (string, error) {
-	out, err := tmux.Output("list-panes", "-a", "-f", "#{!=:#{session_name},_shared}", "-F", listFormat)
+	out, err := listOutput()
 	if err != nil {
 		return "", err
 	}
