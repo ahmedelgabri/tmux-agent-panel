@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state idle",
+            "command": "tap state idle --agent claude",
             "async": true
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state running",
+            "command": "tap state running --agent claude",
             "async": true
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state running",
+            "command": "tap state running --agent claude",
             "async": true
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state idle",
+            "command": "tap state idle --agent claude",
             "async": true
           }
         ]
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state notification",
+            "command": "tap state notification --agent claude",
             "async": true
           }
         ]
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state clear",
+            "command": "tap state clear --agent claude",
             "async": true
           }
         ]

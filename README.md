@@ -87,7 +87,7 @@ Pick one channel per agent — either the plugin or `tap install`, not both, or 
 
 ## How it works
 
-Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that invoke `tap state`. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
+Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`, `@agent_name`) through hooks that invoke `tap state`. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. The installed hooks pass `--agent <agent>` so the pane's agent is recorded explicitly; for panes without an `@agent_name` the picker falls back to deriving it from the pane's current command.
 
 | Agent       | Integration                                | States                                     |
 | ----------- | ------------------------------------------ | ------------------------------------------ |
@@ -106,7 +106,8 @@ tap state running | idle | waiting | blocked # set @agent_state on $TMUX_PANE
 tap state notification                       # route a Notification payload from stdin
 tap state running --title-stdin              # also store the hook JSON's .prompt as @agent_task
 tap state running --title 'some task'        # also store free text as @agent_task
-tap state clear                              # unset both options
+tap state running --agent claude             # also record the agent as @agent_name
+tap state clear                              # unset all options
 ```
 
 Outside tmux every `state` invocation is a silent no-op, so hooks are safe to install unconditionally.

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state idle",
+            "command": "tap state idle --agent codex",
             "async": true
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state running --title-stdin",
+            "command": "tap state running --agent codex --title-stdin",
             "async": true
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state running",
+            "command": "tap state running --agent codex",
             "async": true
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state idle",
+            "command": "tap state idle --agent codex",
             "async": true
           }
         ]
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state blocked",
+            "command": "tap state blocked --agent codex",
             "async": true
           }
         ]
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tap state clear",
+            "command": "tap state clear --agent codex",
             "async": true
           }
         ]
