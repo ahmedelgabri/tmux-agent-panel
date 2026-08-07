@@ -67,18 +67,33 @@ func All() []Agent {
 	}
 }
 
+// Names lists the supported agent names in display order.
+func Names() []string {
+	all := All()
+	names := make([]string, len(all))
+	for i, a := range all {
+		names[i] = a.Name
+	}
+	return names
+}
+
+// ByName returns the agent with the given name.
+func ByName(name string) (Agent, bool) {
+	for _, a := range All() {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return Agent{}, false
+}
+
 // ForCommand maps a pane's current command to its agent. Home Manager
 // wraps binaries, so agents can show up as e.g. ".claude-wrapped" — strip
 // the wrapper to detect them.
 func ForCommand(command string) (Agent, bool) {
 	c := strings.TrimPrefix(command, ".")
 	c = strings.TrimSuffix(c, "-wrapped")
-	for _, a := range All() {
-		if a.Name == c {
-			return a, true
-		}
-	}
-	return Agent{}, false
+	return ByName(c)
 }
 
 // Detected reports whether the agent's binary is on PATH; install skips

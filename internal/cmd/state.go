@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 )
@@ -14,6 +15,7 @@ import (
 var (
 	titleStdin bool
 	titleText  string
+	agentName  string
 )
 
 var stateCmd = &cobra.Command{
@@ -26,10 +28,13 @@ points at the right pane. Outside tmux this is a no-op.
 
 'notification' derives the state from a Notification hook payload on stdin:
 permission requests become blocked, everything else becomes waiting.
-'clear' unsets both options.`,
+'clear' unsets all options.
+
+--agent names the reporting agent (@agent_name) so the picker doesn't have
+to rely on the pane's current command, which some systems misreport.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolved, err := state.Set(args[0], titleStdin, titleText, os.Stdin)
+		resolved, err := state.Set(args[0], agentName, titleStdin, titleText, os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -52,5 +57,7 @@ func init() {
 		"store the hook JSON's .prompt from stdin as the pane's @agent_task")
 	stateCmd.Flags().StringVar(&titleText, "title", "",
 		"store this text (normalized) as the pane's @agent_task")
+	stateCmd.Flags().StringVar(&agentName, "agent", "",
+		"record this agent ("+strings.Join(agents.Names(), "|")+") as the pane's @agent_name")
 	rootCmd.AddCommand(stateCmd)
 }

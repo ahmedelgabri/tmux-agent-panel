@@ -1,8 +1,9 @@
 // Package state records coding-agent activity on the enclosing tmux pane so
 // the picker can render agent rows. It is called from agent hooks (Claude
 // Code settings.json, Codex hooks.json); hooks run as children of the agent,
-// so $TMUX_PANE points at the right pane. Which agent it is isn't recorded —
-// the picker derives that from the pane's current command.
+// so $TMUX_PANE points at the right pane. Which agent it is comes from the
+// hook's --agent flag (@agent_name); the picker falls back to the pane's
+// current command for panes that never reported one.
 package state
 
 import (
@@ -12,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
@@ -20,10 +22,13 @@ import (
 const TaskMaxLength = 60
 
 // Pane-scoped tmux user options tap owns. The picker reads what Set (and
-// the pi extension) writes.
+// the pi extension) writes. AgentOption names the agent explicitly because
+// pane_current_command is unreliable on some systems (wrappers, version
+// strings, generic interpreters).
 const (
 	StateOption = "@agent_state"
 	TaskOption  = "@agent_task"
+	AgentOption = "@agent_name"
 )
 
 // Desc describes one agent state: how it validates, sorts, and renders.
@@ -78,21 +83,30 @@ func valid(name string) bool {
 // ("clear", or a concrete state — notification payloads resolve to
 // blocked/waiting). Outside tmux it is a no-op returning "": hooks fire for
 // agents running anywhere, but only tmux panes can display state. "clear"
-// unsets both options. The task comes from title (normalized free text,
-// for programmatic callers like the pi extension) or, with titleStdin,
-// from the hook JSON's .prompt on stdin.
-func Set(st string, titleStdin bool, title string, stdin io.Reader) (string, error) {
+// unsets all options. A non-empty agent names which agent is reporting
+// (@agent_name), for systems where the pane's current command misreports.
+// The task comes from title (normalized free text, for programmatic callers
+// like the pi extension) or, with titleStdin, from the hook JSON's .prompt
+// on stdin.
+func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (string, error) {
 	pane := os.Getenv("TMUX_PANE")
 	if !tmux.InsideTmux() || pane == "" {
 		return "", nil
 	}
 
+	if agent != "" {
+		if _, ok := agents.ByName(agent); !ok {
+			return "", fmt.Errorf("invalid agent %q (want %s)", agent, strings.Join(agents.Names(), "|"))
+		}
+	}
+
 	if st == "clear" {
-		// One tmux invocation for both options; a `;` argument separates
-		// tmux commands, and the second runs even if the first fails
+		// One tmux invocation for all options; a `;` argument separates
+		// tmux commands, and each runs even if an earlier one fails
 		// because an option was never set.
 		_ = tmux.Run("set-option", "-pu", "-t", pane, StateOption, ";",
-			"set-option", "-pu", "-t", pane, TaskOption)
+			"set-option", "-pu", "-t", pane, TaskOption, ";",
+			"set-option", "-pu", "-t", pane, AgentOption)
 		return "clear", nil
 	}
 
@@ -114,6 +128,9 @@ func Set(st string, titleStdin bool, title string, stdin io.Reader) (string, err
 	args := []string{"set-option", "-p", "-t", pane, StateOption, st}
 	if task != "" {
 		args = append(args, ";", "set-option", "-p", "-t", pane, TaskOption, task)
+	}
+	if agent != "" {
+		args = append(args, ";", "set-option", "-p", "-t", pane, AgentOption, agent)
 	}
 	if err := tmux.Run(args...); err != nil {
 		return "", err

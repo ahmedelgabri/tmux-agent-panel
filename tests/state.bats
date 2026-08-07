@@ -18,12 +18,27 @@ teardown() {
 }
 
 @test "state clear unsets the options" {
-	"$TAP" state blocked
+	"$TAP" state blocked --agent claude
 	run "$TAP" state clear
 	[ "$status" -eq 0 ]
 	# -q: unset user options otherwise make show-options error
 	run tmx show-options -pqv -t "$TMUX_PANE" @agent_state
 	[ -z "$output" ]
+	run tmx show-options -pqv -t "$TMUX_PANE" @agent_name
+	[ -z "$output" ]
+}
+
+@test "agent flag sets @agent_name on the pane" {
+	run "$TAP" state running --agent codex
+	[ "$status" -eq 0 ]
+	run tmx show-options -pv -t "$TMUX_PANE" @agent_name
+	[ "$output" = "codex" ]
+}
+
+@test "unknown agent fails" {
+	run "$TAP" state running --agent bogus
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"invalid agent"* ]]
 }
 
 @test "notification with permission message becomes blocked" {
