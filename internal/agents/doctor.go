@@ -41,15 +41,19 @@ func Doctor() []Check {
 		var b strings.Builder
 		detected := a.Detected()
 		installed := a.Installed()
-		ok := !detected || installed
+		current := installed && a.Current()
+		ok := !detected || current
 		if detected {
 			b.WriteString("binary found")
 		} else {
 			b.WriteString("binary not found")
 		}
-		if installed {
+		switch {
+		case installed && current:
 			fmt.Fprintf(&b, ", hooks installed (%s)", path)
-		} else {
+		case installed:
+			fmt.Fprintf(&b, ", hooks outdated. Run `tap install` (%s)", path)
+		default:
 			fmt.Fprintf(&b, ", hooks not installed (%s)", path)
 		}
 		checks = append(checks, Check{a.Name, ok, b.String()})

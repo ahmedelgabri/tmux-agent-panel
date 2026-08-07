@@ -20,4 +20,4 @@ func claudeSettingsPath() (string, error) {
 	return filepath.Join(dir, "settings.json"), nil
 }
 
-var installClaude, uninstallClaude, claudeInstalled = jsonHookFuncs(claudeSettingsPath, plugins.ClaudeHooks)
+var installClaude, uninstallClaude, claudeInstalled, claudeCurrent = jsonHookFuncs(claudeSettingsPath, plugins.ClaudeHooks)

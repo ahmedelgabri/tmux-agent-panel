@@ -21,4 +21,4 @@ func codexHooksPath() (string, error) {
 	return filepath.Join(dir, "hooks.json"), nil
 }
 
-var installCodex, uninstallCodex, codexInstalled = jsonHookFuncs(codexHooksPath, plugins.CodexHooks)
+var installCodex, uninstallCodex, codexInstalled, codexCurrent = jsonHookFuncs(codexHooksPath, plugins.CodexHooks)

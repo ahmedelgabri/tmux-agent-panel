@@ -61,4 +61,14 @@ setup() {
 	run "$TAP" doctor
 	[[ "$output" == *"tmux"* ]]
 	[[ "$output" == *"hooks installed"* ]]
+	[[ "$output" != *"outdated"* ]]
+}
+
+@test "doctor flags outdated hooks" {
+	"$TAP" install --claude --codex --pi
+	# Simulate hooks from a tap version that predates --agent.
+	sed -i.orig 's/ --agent claude//g' "$CLAUDE_CONFIG_DIR/settings.json"
+	run "$TAP" doctor
+	[[ "$output" == *"outdated"* ]]
+	[[ "$output" == *"tap install"* ]]
 }

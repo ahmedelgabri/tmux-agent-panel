@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -26,7 +28,7 @@ const Marker = "tap state"
 // jsonHookFuncs wires the shared install flow for agents whose integration
 // is a JSON hooks file (Claude, Codex): resolve the config path, then
 // merge/strip/detect tap's embedded hook set.
-func jsonHookFuncs(pathFn func() (string, error), hooks []byte) (install, uninstall func() error, installed func() bool) {
+func jsonHookFuncs(pathFn func() (string, error), hooks []byte) (install, uninstall func() error, installed, current func() bool) {
 	install = func() error {
 		path, err := pathFn()
 		if err != nil {
@@ -45,7 +47,11 @@ func jsonHookFuncs(pathFn func() (string, error), hooks []byte) (install, uninst
 		path, err := pathFn()
 		return err == nil && hooksInstalled(path)
 	}
-	return install, uninstall, installed
+	current = func() bool {
+		path, err := pathFn()
+		return err != nil || hooksCurrent(path, hooks)
+	}
+	return install, uninstall, installed, current
 }
 
 // pluginHooks is the shape of an embedded plugin hooks.json.
@@ -174,6 +180,53 @@ func uninstallHooks(path string) error {
 func hooksInstalled(path string) bool {
 	data, err := os.ReadFile(path)
 	return err == nil && strings.Contains(string(data), Marker)
+}
+
+// hooksCurrent reports whether the tap-owned entries in the file match the
+// embedded hook set, catching stale installs whose commands predate a flag
+// (e.g. --agent). Only meaningful when hooks are installed; a missing or
+// unreadable file counts as current so "not installed" stays the only
+// finding.
+func hooksCurrent(path string, hooksJSON []byte) bool {
+	var plugin pluginHooks
+	if err := json.Unmarshal(hooksJSON, &plugin); err != nil {
+		return true
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	var root pluginHooks
+	if err := json.Unmarshal(data, &root); err != nil {
+		return true
+	}
+	return slices.Equal(markedCommands(plugin.Hooks), markedCommands(root.Hooks))
+}
+
+// markedCommands lists the tap-owned (event, command) pairs, sorted so two
+// hook sets compare structurally regardless of group layout.
+func markedCommands(hooks map[string][]any) []string {
+	var out []string
+	for event, groups := range hooks {
+		for _, g := range groups {
+			group, ok := g.(map[string]any)
+			if !ok {
+				continue
+			}
+			entries, _ := group["hooks"].([]any)
+			for _, e := range entries {
+				entry, ok := e.(map[string]any)
+				if !ok {
+					continue
+				}
+				if cmd, _ := entry["command"].(string); strings.Contains(cmd, Marker) {
+					out = append(out, event+"\t"+cmd)
+				}
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // stripMarked deletes tap-owned entries under the given event path, and

@@ -34,6 +34,10 @@ type Agent struct {
 	Uninstall func() error
 	// Installed reports whether tap's hooks are present.
 	Installed func() bool
+	// Current reports whether the installed hooks match the embedded set;
+	// false means a stale install whose commands predate a flag change
+	// (fix: `tap install`). Only meaningful when Installed.
+	Current func() bool
 }
 
 // All returns the supported agents in display order.
@@ -47,6 +51,7 @@ func All() []Agent {
 			Install:       installClaude,
 			Uninstall:     uninstallClaude,
 			Installed:     claudeInstalled,
+			Current:       claudeCurrent,
 		},
 		{
 			Name:       "codex",
@@ -55,6 +60,7 @@ func All() []Agent {
 			Install:    installCodex,
 			Uninstall:  uninstallCodex,
 			Installed:  codexInstalled,
+			Current:    codexCurrent,
 		},
 		{
 			Name:       "pi",
@@ -63,6 +69,7 @@ func All() []Agent {
 			Install:    installPi,
 			Uninstall:  uninstallPi,
 			Installed:  piInstalled,
+			Current:    piCurrent,
 		},
 	}
 }

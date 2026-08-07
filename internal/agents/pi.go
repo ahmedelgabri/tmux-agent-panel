@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"bytes"
 	_ "embed"
 	"os"
 	"path/filepath"
@@ -67,4 +68,17 @@ func piInstalled() bool {
 	}
 	data, err := os.ReadFile(path)
 	return err == nil && strings.Contains(string(data), piMarker)
+}
+
+// piCurrent reports whether the installed extension matches the embedded
+// copy; install overwrites the file wholesale, so byte equality is the
+// freshness check. Missing or unreadable files count as current — "not
+// installed" stays the only finding.
+func piCurrent() bool {
+	path, err := piExtensionPath()
+	if err != nil {
+		return true
+	}
+	data, err := os.ReadFile(path)
+	return err != nil || bytes.Equal(data, piExtension)
 }

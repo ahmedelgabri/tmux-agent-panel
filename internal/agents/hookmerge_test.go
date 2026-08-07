@@ -259,6 +259,69 @@ func TestEmbeddedPluginHooksAreCanonical(t *testing.T) {
 	}
 }
 
+func TestHooksCurrent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := installHooks(path, testHooks); err != nil {
+		t.Fatal(err)
+	}
+	if !hooksCurrent(path, testHooks) {
+		t.Errorf("fresh install should be current")
+	}
+
+	// A stale install: same events, but the commands predate a flag.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := strings.ReplaceAll(string(data), "tap state idle", "tap state idle --before-some-flag")
+	if err := os.WriteFile(path, []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if hooksCurrent(path, testHooks) {
+		t.Errorf("changed commands should not be current")
+	}
+
+	// Missing file: freshness only means anything once hooks are installed,
+	// so it stays current and "not installed" remains the only finding.
+	if !hooksCurrent(filepath.Join(t.TempDir(), "nope.json"), testHooks) {
+		t.Errorf("missing file should count as current")
+	}
+}
+
+func TestHooksCurrentIgnoresForeignHooks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installHooks(path, testHooks); err != nil {
+		t.Fatal(err)
+	}
+	if !hooksCurrent(path, testHooks) {
+		t.Errorf("foreign hooks must not affect freshness")
+	}
+}
+
+func TestPiCurrent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", dir)
+	if !piCurrent() {
+		t.Errorf("missing extension should count as current")
+	}
+	if err := installPi(); err != nil {
+		t.Fatal(err)
+	}
+	if !piCurrent() {
+		t.Errorf("fresh install should be current")
+	}
+	path := filepath.Join(dir, "extensions", "tap-agent-state.ts")
+	if err := os.WriteFile(path, []byte(piMarker+"\n// older version"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if piCurrent() {
+		t.Errorf("diverged extension should not be current")
+	}
+}
+
 func TestUninstallMissingFileIsNoop(t *testing.T) {
 	if err := uninstallHooks(filepath.Join(t.TempDir(), "nope.json")); err != nil {
 		t.Errorf("missing file should be a no-op, got %v", err)
