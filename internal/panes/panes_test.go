@@ -10,11 +10,11 @@ func line(fields ...string) string {
 }
 
 var fixture = []string{
-	line("%1", "main:1.1", "editor", "nvim", "/Users/x/code", "", "", "nvim"),
-	line("%2", "main:1.2", "agent", ".claude-wrapped", "/Users/x/code", "running", "fix the bug", "✳ fixing"),
-	line("%3", "work:2.1", "shell", "zsh", "/Users/x", "", "", "zsh"),
-	line("%4", "popup_dotfil_a3f2:1.1", "popup", "codex", "/Users/x/.dotfiles", "blocked", "review", "codex"),
-	line("%5", "main:3.1", "pi", "pi", "/Users/x", "idle", "", "pi"),
+	line("%1", "main:1.1", "editor", "nvim", "/Users/x/code", "", "", "nvim", ""),
+	line("%2", "main:1.2", "agent", ".claude-wrapped", "/Users/x/code", "running", "fix the bug", "✳ fixing", ""),
+	line("%3", "work:2.1", "shell", "zsh", "/Users/x", "", "", "zsh", ""),
+	line("%4", "popup_dotfil_a3f2:1.1", "popup", "codex", "/Users/x/.dotfiles", "blocked", "review", "codex", ""),
+	line("%5", "main:3.1", "pi", "pi", "/Users/x", "idle", "", "pi", ""),
 }
 
 func TestAgentFor(t *testing.T) {
@@ -32,6 +32,32 @@ func TestAgentFor(t *testing.T) {
 		if got := AgentFor(in); got != want {
 			t.Errorf("AgentFor(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestAgentNameOverride(t *testing.T) {
+	// @agent_name marks a pane whose command misreports (here: node) as an
+	// agent row.
+	l := line("%9", "main:1.1", "w", "node", "/", "running", "porting the picker", "t", "claude")
+	rows := BuildRows([]string{l}, Options{})
+	if !strings.Contains(rows[0].Display, "✳") {
+		t.Errorf("@agent_name should classify the pane as claude: %q", rows[0].Display)
+	}
+	if !strings.Contains(rows[0].Display, "porting the picker") {
+		t.Errorf("agent task should be shown: %q", rows[0].Display)
+	}
+
+	// An unrecognized @agent_name falls back to command detection.
+	l = line("%9", "main:1.1", "w", "codex", "/", "running", "", "t", "bogus")
+	rows = BuildRows([]string{l}, Options{})
+	if !strings.Contains(rows[0].Display, "⌬") {
+		t.Errorf("unknown @agent_name should fall back to the command: %q", rows[0].Display)
+	}
+
+	l = line("%9", "main:1.1", "w", "zsh", "/", "", "", "zsh", "bogus")
+	rows = BuildRows([]string{l}, Options{AgentsOnly: true})
+	if len(rows) != 0 {
+		t.Errorf("unknown agent and command should stay a plain pane")
 	}
 }
 
@@ -110,7 +136,7 @@ func TestBuildRowsDisplay(t *testing.T) {
 func TestClaudeTitleFallback(t *testing.T) {
 	// No @agent_task: Claude's pane title (minus the leading glyph) is the
 	// task, and a non-✳ glyph means running.
-	l := line("%9", "main:1.1", "w", "claude", "/", "", "", "⠹ compiling the thing")
+	l := line("%9", "main:1.1", "w", "claude", "/", "", "", "⠹ compiling the thing", "")
 	rows := BuildRows([]string{l}, Options{})
 	if !strings.Contains(rows[0].Display, "compiling the thing") {
 		t.Errorf("title fallback missing: %q", rows[0].Display)
@@ -119,7 +145,7 @@ func TestClaudeTitleFallback(t *testing.T) {
 		t.Errorf("spinner title should imply running, not idle: %q", rows[0].Display)
 	}
 
-	l = line("%9", "main:1.1", "w", "claude", "/", "", "", "✳ waiting around")
+	l = line("%9", "main:1.1", "w", "claude", "/", "", "", "✳ waiting around", "")
 	rows = BuildRows([]string{l}, Options{})
 	if !strings.Contains(rows[0].Display, "◌") {
 		t.Errorf("✳ title should imply idle: %q", rows[0].Display)
@@ -128,7 +154,7 @@ func TestClaudeTitleFallback(t *testing.T) {
 
 func TestTitleTruncation(t *testing.T) {
 	long := strings.Repeat("x", 80)
-	l := line("%9", "main:1.1", "w", "claude", "/", "running", long, "t")
+	l := line("%9", "main:1.1", "w", "claude", "/", "running", long, "t", "")
 	rows := BuildRows([]string{l}, Options{})
 	if !strings.Contains(rows[0].Display, "…") {
 		t.Errorf("long task should be truncated with …")

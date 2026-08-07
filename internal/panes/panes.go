@@ -2,11 +2,12 @@
 // or pi show the agent icon in the leading slot and an agent column
 // (state glyph + task) instead of the
 // command column, fed by the @agent_state/@agent_task pane options that the
-// agents set via hooks/extensions; which agent a pane runs is derived from
-// its current command. Agent rows sort first (blocked, waiting, running,
-// idle), separated from plain panes by divider rows. The `_shared` session
-// is skipped: its windows are linked into the named sessions, so listing it
-// would only duplicate rows.
+// agents set via hooks/extensions; which agent a pane runs comes from the
+// @agent_name option the hooks set, falling back to the pane's current
+// command for panes that never reported one. Agent rows sort first (blocked,
+// waiting, running, idle), separated from plain panes by divider rows. The
+// `_shared` session is skipped: its windows are linked into the named
+// sessions, so listing it would only duplicate rows.
 package panes
 
 import (
@@ -30,7 +31,7 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 const CurrentPaneEnv = "TAP_CURRENT_PANE"
 
 // listFormat matches the field order Pane and BuildRows expect.
-const listFormat = "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{window_name}\t#{pane_current_command}\t#{pane_current_path}\t#{" + state.StateOption + "}\t#{" + state.TaskOption + "}\t#{pane_title}"
+const listFormat = "#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{window_name}\t#{pane_current_command}\t#{pane_current_path}\t#{" + state.StateOption + "}\t#{" + state.TaskOption + "}\t#{pane_title}\t#{" + state.AgentOption + "}"
 
 // Pane is one line of `tmux list-panes` output.
 type Pane struct {
@@ -42,6 +43,7 @@ type Pane struct {
 	State   string // @agent_state, may be empty
 	Task    string // @agent_task, may be empty
 	Title   string // pane_title
+	Agent   string // @agent_name, may be empty
 }
 
 // Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
@@ -64,12 +66,12 @@ type Options struct {
 // ParsePane splits one tab-separated list-panes line.
 func ParsePane(line string) (Pane, bool) {
 	f := strings.Split(line, "\t")
-	if len(f) < 8 {
+	if len(f) < 9 {
 		return Pane{}, false
 	}
 	return Pane{
 		ID: f[0], Addr: f[1], Window: f[2], Command: f[3],
-		Path: f[4], State: f[5], Task: f[6], Title: f[7],
+		Path: f[4], State: f[5], Task: f[6], Title: f[7], Agent: f[8],
 	}, true
 }
 
@@ -97,7 +99,12 @@ func BuildRows(lines []string, o Options) []Row {
 		if !ok {
 			continue
 		}
-		meta, isAgent := agents.ForCommand(p.Command)
+		// The hook-reported @agent_name wins: pane_current_command is
+		// unreliable on some systems (wrappers, generic interpreters).
+		meta, isAgent := agents.ByName(p.Agent)
+		if !isAgent {
+			meta, isAgent = agents.ForCommand(p.Command)
+		}
 		if o.AgentsOnly && !isAgent {
 			continue
 		}

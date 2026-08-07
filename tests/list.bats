@@ -55,6 +55,22 @@ teardown() {
 	[[ "$output" != *"──── agents ────"* ]]
 }
 
+@test "__list marks agent panes via @agent_name when the command misreports" {
+	# The command is plain bash — no agent name to derive — so only the
+	# @agent_name option can classify the pane.
+	tmx new-window -t main -n optwin "bash -c 'read x'"
+	sleep 0.5
+	pane="$(tmx display-message -t main:optwin -p '#{pane_id}')"
+	tmx set-option -p -t "$pane" @agent_name claude
+	tmx set-option -p -t "$pane" @agent_state blocked
+	tmx set-option -p -t "$pane" @agent_task 'ship the flag'
+
+	run "$TAP" __list --agents
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"ship the flag"* ]]
+	[[ "$output" == *"▲"* ]]
+}
+
 @test "__toggle flips between views" {
 	FZF_PROMPT='» ' run "$TAP" __toggle
 	[ "$status" -eq 0 ]
