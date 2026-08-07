@@ -11,6 +11,7 @@
 package panes
 
 import (
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -107,12 +108,17 @@ func BuildRows(lines []string, o Options) []Row {
 		isAgent bool
 	}
 	var entries []entry
-	winWidth, cmdWidth, agentCount := 0, 0, 0
+	winWidth, cmdWidth, agentCount, orphans := 0, 0, 0, 0
 
 	for _, line := range lines {
 		p, ok := ParsePane(line)
 		if !ok {
 			continue
+		}
+		// Counted before the agents-only filter: an orphan is by definition
+		// not an agent row, but the warning must show in both views.
+		if Orphaned(p) {
+			orphans++
 		}
 		// The hook-reported @agent_name wins: pane_current_command is
 		// unreliable on some systems (wrappers, generic interpreters).
@@ -206,7 +212,19 @@ func BuildRows(lines []string, o Options) []Row {
 	if divided {
 		rows = append(rows, Row{Display: ansi.Gray + "──── panes ─────" + ansi.Reset})
 	}
-	return append(rows, plainRows...)
+	rows = append(rows, plainRows...)
+	// Orphaned panes are never guessed into agent rows (a stale option
+	// after an unclean exit would render a ghost agent); a non-selectable
+	// warning row points at doctor, which explains both causes.
+	if orphans > 0 {
+		noun := "pane reports"
+		if orphans > 1 {
+			noun = "panes report"
+		}
+		rows = append(rows, Row{Display: ansi.Yellow + "⚠" + ansi.Reset + ansi.Gray +
+			fmt.Sprintf(" %d %s agent state without an agent — run `tap doctor`", orphans, noun) + ansi.Reset})
+	}
+	return rows
 }
 
 // Render emits rows in the picker's wire format: pane_id, address, display,

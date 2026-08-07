@@ -53,6 +53,30 @@ func TestOrphaned(t *testing.T) {
 	}
 }
 
+func TestOrphanWarningRow(t *testing.T) {
+	orphan := line("%9", "main:1.1", "w", "zsh", "/", "running", "", "zsh", "")
+	rows := BuildRows([]string{fixture[0], orphan}, Options{})
+	last := rows[len(rows)-1]
+	if last.PaneID != "" || !strings.Contains(last.Display, "tap doctor") {
+		t.Errorf("expected non-selectable warning row, got %+v", last)
+	}
+	// The orphaned pane itself stays a plain row, not a guessed agent.
+	if len(rows) != 3 {
+		t.Fatalf("got %d rows, want 3 (2 plain + warning)", len(rows))
+	}
+
+	rows = BuildRows([]string{orphan}, Options{AgentsOnly: true})
+	if len(rows) != 1 || !strings.Contains(rows[0].Display, "tap doctor") {
+		t.Errorf("agents-only view should still warn: %+v", rows)
+	}
+
+	for _, r := range BuildRows(fixture, Options{}) {
+		if strings.Contains(r.Display, "⚠") {
+			t.Errorf("no warning should show without orphans: %q", r.Display)
+		}
+	}
+}
+
 func TestAgentNameOverride(t *testing.T) {
 	// @agent_name marks a pane whose command misreports (here: node) as an
 	// agent row.

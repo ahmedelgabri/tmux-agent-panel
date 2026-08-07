@@ -71,6 +71,21 @@ teardown() {
 	[[ "$output" == *"▲"* ]]
 }
 
+@test "__list warns about orphaned agent state" {
+	tmx new-window -t main -n orphanwin "bash -c 'read x'"
+	sleep 0.5
+	pane="$(tmx display-message -t main:orphanwin -p '#{pane_id}')"
+	tmx set-option -p -t "$pane" @agent_state running
+
+	run "$TAP" __list
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"tap doctor"* ]]
+
+	run "$TAP" __list --agents
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"tap doctor"* ]]
+}
+
 @test "doctor flags panes with orphaned agent state" {
 	tmx new-window -t main -n orphanwin "bash -c 'read x'"
 	sleep 0.5
