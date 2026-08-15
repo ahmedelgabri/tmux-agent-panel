@@ -1,7 +1,7 @@
 {
   "name": "tap",
   "description": "Report Claude Code activity into tmux pane options for the tap pane picker",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "author": {
     "name": "Ahmed El Gabri",
     "url": "https://github.com/ahmedelgabri"
