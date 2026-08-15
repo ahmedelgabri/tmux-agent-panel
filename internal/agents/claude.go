@@ -16,12 +16,14 @@ import (
 // summary) is a better task source than the raw prompt, so the picker
 // parses that instead.
 
-// claudeMinVersion is the oldest Claude Code safe to install into: before
+// claudeMinVersion is the oldest Claude Code safe to install into. Before
 // 2.1.101 an unrecognized hook event name made Claude ignore the entire
-// settings.json — permissions included — so splicing newer events there
-// would break the user's whole config. Every event tap wires also exists
-// by that release.
-var claudeMinVersion = [3]int{2, 1, 101}
+// settings.json — permissions included — so the minimum must be a version
+// that either recognizes every event tap wires or (2.1.101+) safely
+// ignores unknown ones. Every wired event exists by 2.1.78 (StopFailure,
+// the newest; verified against the 2.1.78 npm bundle). If a future hook
+// set adds an event introduced after 2.1.101, bump this back to 2.1.101.
+var claudeMinVersion = [3]int{2, 1, 78}
 
 func claudeSettingsPath() (string, error) {
 	dir, err := envOrHome("CLAUDE_CONFIG_DIR", ".claude")

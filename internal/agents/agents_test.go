@@ -23,18 +23,18 @@ func TestParseVersion(t *testing.T) {
 }
 
 func TestVersionLess(t *testing.T) {
-	min := [3]int{2, 1, 101}
+	// Boundary cases pin the install gate to claudeMinVersion exactly.
 	cases := map[[3]int]bool{
-		{2, 1, 100}: true,
+		{2, 1, 77}:  true,
 		{2, 0, 999}: true,
 		{1, 9, 999}: true,
-		{2, 1, 101}: false,
+		{2, 1, 78}:  false,
 		{2, 1, 226}: false,
 		{3, 0, 0}:   false,
 	}
 	for v, want := range cases {
-		if got := versionLess(v, min); got != want {
-			t.Errorf("versionLess(%v, %v) = %v, want %v", v, min, got, want)
+		if got := versionLess(v, claudeMinVersion); got != want {
+			t.Errorf("versionLess(%v, %v) = %v, want %v", v, claudeMinVersion, got, want)
 		}
 	}
 }
