@@ -76,15 +76,6 @@ func ParsePane(line string) (Pane, bool) {
 	}, true
 }
 
-// AgentFor maps a pane's current command to an agent name, or "" for plain
-// panes.
-func AgentFor(command string) string {
-	if a, ok := agents.ForCommand(command); ok {
-		return a.Name
-	}
-	return ""
-}
-
 // Orphaned reports whether a pane records agent state without a resolvable
 // agent identity: hooks that don't pass --agent, or options gone stale
 // after an unclean agent exit. The picker warns about such panes and
@@ -108,7 +99,7 @@ func BuildRows(lines []string, o Options) []Row {
 		isAgent bool
 	}
 	var entries []entry
-	winWidth, cmdWidth, agentCount, orphans := 0, 0, 0, 0
+	winWidth, cmdWidth, orphans := 0, 0, 0
 
 	for _, line := range lines {
 		p, ok := ParsePane(line)
@@ -135,9 +126,7 @@ func BuildRows(lines []string, o Options) []Row {
 		if w := len([]rune(p.Window)); w > winWidth {
 			winWidth = w
 		}
-		if isAgent {
-			agentCount++
-		} else {
+		if !isAgent {
 			if w := len([]rune(p.Command)); w > cmdWidth {
 				cmdWidth = w
 			}
@@ -201,7 +190,7 @@ func BuildRows(lines []string, o Options) []Row {
 	sort.SliceStable(agentRows, func(a, b int) bool { return agentRows[a].rank < agentRows[b].rank })
 
 	// Dividers only make sense when both groups are present.
-	divided := !o.AgentsOnly && agentCount > 0 && agentCount < len(entries)
+	divided := len(agentRows) > 0 && len(plainRows) > 0
 	rows := make([]Row, 0, len(entries)+2)
 	if divided {
 		rows = append(rows, Row{Display: ansi.Gray + "──── agents ────" + ansi.Reset})

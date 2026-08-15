@@ -8,6 +8,7 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 )
 
 var doctorCmd = &cobra.Command{
@@ -24,8 +25,8 @@ var doctorCmd = &cobra.Command{
 					checks = append(checks, agents.Check{
 						Name: "pane",
 						OK:   false,
-						Detail: fmt.Sprintf("%s (%s): @agent_state=%s but no agent identity — hooks not passing --agent, or stale options (run `tap state clear` in that pane)",
-							p.ID, p.Addr, p.State),
+						Detail: fmt.Sprintf("%s (%s): %s=%s but no agent identity — hooks not passing --agent, or stale options (run `tap state clear` in that pane)",
+							p.ID, p.Addr, state.StateOption, p.State),
 					})
 				}
 			}

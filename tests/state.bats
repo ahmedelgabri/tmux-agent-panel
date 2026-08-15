@@ -42,46 +42,28 @@ teardown() {
 }
 
 @test "notification with permission message becomes blocked" {
-	run bash -c "echo '{\"message\":\"Claude needs your permission\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "blocked" ]
+	assert_notification_state '{"message":"Claude needs your permission"}' blocked
 }
 
 @test "notification without permission message becomes waiting" {
-	run bash -c "echo '{\"message\":\"Waiting for your input\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "waiting" ]
+	assert_notification_state '{"message":"Waiting for your input"}' waiting
 }
 
 @test "notification routes on notification_type over message text" {
-	run bash -c "echo '{\"notification_type\":\"permission_prompt\",\"message\":\"localized wording\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "blocked" ]
+	assert_notification_state '{"notification_type":"permission_prompt","message":"localized wording"}' blocked
 }
 
 @test "worker permission notification becomes blocked" {
-	run bash -c "echo '{\"notification_type\":\"worker_permission_prompt\",\"message\":\"my-worker needs permission for Bash\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "blocked" ]
+	assert_notification_state '{"notification_type":"worker_permission_prompt","message":"my-worker needs permission for Bash"}' blocked
 }
 
 @test "idle_prompt notification becomes idle" {
-	run bash -c "echo '{\"notification_type\":\"idle_prompt\",\"message\":\"Claude is waiting for your input\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "idle" ]
+	assert_notification_state '{"notification_type":"idle_prompt","message":"Claude is waiting for your input"}' idle
 }
 
 @test "completion notification leaves pane state untouched" {
 	"$TAP" state running
-	run bash -c "echo '{\"notification_type\":\"elicitation_complete\"}' | '$TAP' state notification"
-	[ "$status" -eq 0 ]
-	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
-	[ "$output" = "running" ]
+	assert_notification_state '{"notification_type":"elicitation_complete"}' running
 }
 
 @test "title-stdin stores the prompt as @agent_task" {

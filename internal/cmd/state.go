@@ -19,7 +19,7 @@ var (
 )
 
 var stateCmd = &cobra.Command{
-	Use:   "state <" + strings.Join(state.Names(), "|") + "|notification|clear>",
+	Use:   "state <" + state.Accepted() + ">",
 	Short: "Record agent state on the enclosing tmux pane",
 	Long: `Records coding-agent activity in pane-scoped tmux user options
 (@agent_state, @agent_task) so the picker can render agent rows. Meant to be

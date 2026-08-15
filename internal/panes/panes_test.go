@@ -17,24 +17,6 @@ var fixture = []string{
 	line("%5", "main:3.1", "pi", "pi", "/Users/x", "idle", "", "pi", ""),
 }
 
-func TestAgentFor(t *testing.T) {
-	cases := map[string]string{
-		"claude":          "claude",
-		".claude-wrapped": "claude",
-		".codex-wrapped":  "codex",
-		"pi":              "pi",
-		".pi-wrapped":     "pi",
-		"nvim":            "",
-		"claudette":       "",
-		"zsh":             "",
-	}
-	for in, want := range cases {
-		if got := AgentFor(in); got != want {
-			t.Errorf("AgentFor(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestOrphaned(t *testing.T) {
 	cases := []struct {
 		pane Pane

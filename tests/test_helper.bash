@@ -21,3 +21,12 @@ start_server() {
 stop_server() {
 	tmx kill-server 2>/dev/null || true
 }
+
+# Pipes a Notification hook payload through `tap state notification` and
+# asserts the pane's @agent_state ends up as expected.
+assert_notification_state() {
+	run bash -c "echo '$1' | '$TAP' state notification"
+	[ "$status" -eq 0 ]
+	run tmx show-options -pv -t "$TMUX_PANE" @agent_state
+	[ "$output" = "$2" ]
+}

@@ -70,13 +70,16 @@ func Names() []string {
 	return names
 }
 
+// Accepted is the full argument vocabulary of the state command: the
+// concrete states plus the notification and clear pseudo-states.
+func Accepted() string {
+	return strings.Join(Names(), "|") + "|notification|clear"
+}
+
+// valid leans on ByName's idle fallback: only a real state name round-trips
+// through it unchanged.
 func valid(name string) bool {
-	for _, d := range States {
-		if d.Name == name {
-			return true
-		}
-	}
-	return false
+	return ByName(name).Name == name
 }
 
 // Set records the given state on $TMUX_PANE and returns what it resolved to
@@ -124,7 +127,7 @@ func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (stri
 		}
 	}
 	if !valid(st) {
-		return "", fmt.Errorf("invalid state %q (want %s|notification|clear)", st, strings.Join(Names(), "|"))
+		return "", fmt.Errorf("invalid state %q (want %s)", st, Accepted())
 	}
 
 	task := NormalizeTask(title)
