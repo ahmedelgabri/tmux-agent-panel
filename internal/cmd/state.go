@@ -26,9 +26,12 @@ var stateCmd = &cobra.Command{
 called from agent hooks; hooks run as children of the agent, so $TMUX_PANE
 points at the right pane. Outside tmux this is a no-op.
 
-'notification' derives the state from a Notification hook payload on stdin:
-permission requests become blocked, everything else becomes waiting.
-'clear' unsets all options.
+'notification' derives the state from a Notification hook payload on stdin,
+routing on its notification_type: permission requests become blocked,
+input-needed types become waiting, idle_prompt becomes idle, and
+completion/success types leave the pane state untouched. Payloads without a
+recognized type fall back to message text (permission means blocked,
+anything else waiting). 'clear' unsets all options.
 
 --agent names the reporting agent (@agent_name) so the picker doesn't have
 to rely on the pane's current command, which some systems misreport.`,

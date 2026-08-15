@@ -81,7 +81,8 @@ func valid(name string) bool {
 
 // Set records the given state on $TMUX_PANE and returns what it resolved to
 // ("clear", or a concrete state — notification payloads resolve to
-// blocked/waiting). Outside tmux it is a no-op returning "": hooks fire for
+// blocked/waiting/idle, or to "" for notifications that leave the pane
+// state untouched). Outside tmux it is a no-op returning "": hooks fire for
 // agents running anywhere, but only tmux panes can display state. "clear"
 // unsets all options. A non-empty agent names which agent is reporting
 // (@agent_name), for systems where the pane's current command misreports.
@@ -116,6 +117,11 @@ func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (stri
 	}
 	if st == "notification" {
 		st = RouteNotification(payload)
+		// Completion/success notifications route to "": the pane keeps
+		// whatever state it already shows.
+		if st == "" {
+			return "", nil
+		}
 	}
 	if !valid(st) {
 		return "", fmt.Errorf("invalid state %q (want %s|notification|clear)", st, strings.Join(Names(), "|"))
@@ -138,15 +144,32 @@ func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (stri
 	return st, nil
 }
 
-// RouteNotification maps a Notification hook payload to a state: permission
-// requests block the agent, everything else (waiting for input, questions)
-// is waiting. The match is on English message text; if the wording changes
-// it degrades to waiting, never to a wrong blocked.
+// RouteNotification maps a Notification hook payload to a state, routing on
+// the stable notification_type field so the mapping survives wording changes
+// and localization. Permission types (matched by substring, which also covers
+// the undocumented worker_permission_prompt) block the agent; input-needed
+// types are waiting; idle_prompt confirms idleness rather than the agent
+// needing the user. Completion/success types return "" — the pane keeps its
+// current state, since e.g. elicitation_complete fires mid-run. Payloads
+// without a recognized type fall back to matching English message text; if
+// the wording changes that degrades to waiting, never to a wrong blocked.
 func RouteNotification(payload []byte) string {
 	var msg struct {
-		Message string `json:"message"`
+		NotificationType string `json:"notification_type"`
+		Message          string `json:"message"`
 	}
 	_ = json.Unmarshal(payload, &msg)
+	if strings.Contains(msg.NotificationType, "permission") {
+		return "blocked"
+	}
+	switch msg.NotificationType {
+	case "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input":
+		return "waiting"
+	case "idle_prompt":
+		return "idle"
+	case "auth_success", "elicitation_complete", "elicitation_response", "agent_completed":
+		return ""
+	}
 	if strings.Contains(strings.ToLower(msg.Message), "permission") {
 		return "blocked"
 	}
