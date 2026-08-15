@@ -64,6 +64,16 @@ setup() {
 	[[ "$output" != *"outdated"* ]]
 }
 
+@test "install refuses a claude that breaks on unknown hook events" {
+	mkdir -p "$BATS_TEST_TMPDIR/bin"
+	printf '#!/bin/sh\necho "2.1.100 (Claude Code)"\n' >"$BATS_TEST_TMPDIR/bin/claude"
+	chmod +x "$BATS_TEST_TMPDIR/bin/claude"
+	run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" "$TAP" install --claude
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"2.1.101"* ]]
+	! grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+}
+
 @test "install migrates hooks out of events no longer in the set" {
 	"$TAP" install --claude
 	# Simulate hooks from a tap version that hooked a since-dropped event.

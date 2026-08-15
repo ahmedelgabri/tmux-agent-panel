@@ -1,7 +1,11 @@
 package agents
 
 import (
+	"fmt"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/ahmedelgabri/tmux-agent-panel/plugins"
 )
@@ -12,6 +16,13 @@ import (
 // summary) is a better task source than the raw prompt, so the picker
 // parses that instead.
 
+// claudeMinVersion is the oldest Claude Code safe to install into: before
+// 2.1.101 an unrecognized hook event name made Claude ignore the entire
+// settings.json — permissions included — so splicing newer events there
+// would break the user's whole config. Every event tap wires also exists
+// by that release.
+var claudeMinVersion = [3]int{2, 1, 101}
+
 func claudeSettingsPath() (string, error) {
 	dir, err := envOrHome("CLAUDE_CONFIG_DIR", ".claude")
 	if err != nil {
@@ -20,4 +31,59 @@ func claudeSettingsPath() (string, error) {
 	return filepath.Join(dir, "settings.json"), nil
 }
 
-var installClaude, uninstallClaude, claudeInstalled, claudeCurrent = jsonHookFuncs(claudeSettingsPath, plugins.ClaudeHooks)
+// parseVersion reads the leading dotted triple from `claude --version`
+// output ("2.1.226 (Claude Code)").
+func parseVersion(out string) ([3]int, bool) {
+	var v [3]int
+	fields := strings.Fields(strings.TrimSpace(out))
+	if len(fields) == 0 {
+		return v, false
+	}
+	parts := strings.SplitN(fields[0], ".", 3)
+	if len(parts) != 3 {
+		return v, false
+	}
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return [3]int{}, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+func versionLess(a, b [3]int) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// claudeVersionSupported refuses installs into a Claude Code old enough to
+// choke on the hook set. No binary or unparseable output passes: forced
+// installs must work without the binary on PATH, and a wrapper mangling
+// --version shouldn't block anyone — the check is best-effort protection.
+func claudeVersionSupported() error {
+	out, err := exec.Command("claude", "--version").Output()
+	if err != nil {
+		return nil
+	}
+	v, ok := parseVersion(string(out))
+	if !ok || !versionLess(v, claudeMinVersion) {
+		return nil
+	}
+	return fmt.Errorf("claude %d.%d.%d is older than %d.%d.%d, which ignores the entire settings.json when it sees an unknown hook event; upgrade Claude Code first",
+		v[0], v[1], v[2], claudeMinVersion[0], claudeMinVersion[1], claudeMinVersion[2])
+}
+
+var installClaudeHooks, uninstallClaude, claudeInstalled, claudeCurrent = jsonHookFuncs(claudeSettingsPath, plugins.ClaudeHooks)
+
+func installClaude() error {
+	if err := claudeVersionSupported(); err != nil {
+		return err
+	}
+	return installClaudeHooks()
+}
