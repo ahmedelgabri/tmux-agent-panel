@@ -138,6 +138,45 @@ func TestInstallPreservesFormattingAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestInstallMigratesDroppedEvents(t *testing.T) {
+	// An install written by a hook set that still hooked PostToolUse — an
+	// event the current embedded set no longer contains.
+	const older = `{
+	"hooks": {
+		"PostToolUse": [
+			{"hooks": [{"type": "command", "command": "tap state running", "async": true}]}
+		],
+		"SessionStart": [
+			{
+				"hooks": [
+					{"type": "command", "command": "~/.claude/hooks/log-event.sh SessionStart", "async": true}
+				]
+			}
+		]
+	}
+}`
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(older), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installHooks(path, testHooks); err != nil {
+		t.Fatal(err)
+	}
+
+	m := read(t, path)
+	hooks := m["hooks"].(map[string]any)
+	if _, ok := hooks["PostToolUse"]; ok {
+		t.Errorf("tap entry under a dropped event must be migrated away")
+	}
+	raw, _ := json.Marshal(m)
+	if !strings.Contains(string(raw), "log-event.sh SessionStart") {
+		t.Errorf("foreign hook was lost during migration")
+	}
+	if !hooksCurrent(path, testHooks) {
+		t.Errorf("migrated install should be current")
+	}
+}
+
 func TestInstallCreatesMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "hooks.json")
 	if err := installHooks(path, testHooks); err != nil {

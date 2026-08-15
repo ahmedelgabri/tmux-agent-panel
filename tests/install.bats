@@ -64,6 +64,17 @@ setup() {
 	[[ "$output" != *"outdated"* ]]
 }
 
+@test "install migrates hooks out of events no longer in the set" {
+	"$TAP" install --claude
+	# Simulate hooks from a tap version that hooked a since-dropped event.
+	sed -i.orig 's/"PreToolUse"/"PostToolUse"/' "$CLAUDE_CONFIG_DIR/settings.json"
+	"$TAP" install --claude
+	! grep -q 'PostToolUse' "$CLAUDE_CONFIG_DIR/settings.json"
+	grep -q '"PreToolUse"' "$CLAUDE_CONFIG_DIR/settings.json"
+	run "$TAP" doctor
+	[[ "$output" != *"outdated"* ]]
+}
+
 @test "doctor flags outdated hooks" {
 	"$TAP" install --claude --codex --pi
 	# Simulate hooks from a tap version that predates --agent.

@@ -104,12 +104,14 @@ func installHooks(path string, hooksJSON []byte) error {
 		return err
 	}
 
-	doc := string(data)
+	// Stripping every event (not just the embedded set's) migrates entries
+	// out of events a newer hook set no longer contains; without it a stale
+	// entry would linger and doctor would report the install outdated with
+	// no way to converge short of uninstalling.
+	doc := stripAllMarked(string(data))
 	var spliceErr error
 	gjson.GetBytes(hooksJSON, "hooks").ForEach(func(event, groups gjson.Result) bool {
 		eventPath := "hooks." + event.String()
-		// tap's groups never mix with user hooks, so removal stays surgical.
-		doc = stripMarked(doc, eventPath)
 		for _, g := range groups.Array() {
 			// Compacting keeps the embedded key order but drops its
 			// indentation: a multi-line splice would not survive the
@@ -157,23 +159,36 @@ func uninstallHooks(path string) error {
 		return err
 	}
 
+	return writeFileAtomic(path, []byte(stripAllMarked(string(data))))
+}
+
+// stripAllMarked removes tap-owned entries under every event in the
+// document. tap's groups never mix with user hooks, so removal stays
+// surgical; untouched events keep their exact bytes.
+func stripAllMarked(doc string) string {
+	hooks := gjson.Get(doc, "hooks")
+	if !hooks.IsObject() {
+		return doc
+	}
 	var events []string
 	hooks.ForEach(func(event, _ gjson.Result) bool {
 		events = append(events, event.String())
 		return true
 	})
-	doc := string(data)
 	for _, event := range events {
 		eventPath := "hooks." + event
-		doc = stripMarked(doc, eventPath)
+		stripped := stripMarked(doc, eventPath)
+		if stripped == doc {
+			continue
+		}
+		doc = stripped
 		// An event emptied by the removal is dropped, matching install,
 		// which only ever adds whole groups.
 		if len(gjson.Get(doc, eventPath).Array()) == 0 {
 			doc, _ = sjson.Delete(doc, eventPath)
 		}
 	}
-
-	return writeFileAtomic(path, []byte(doc))
+	return doc
 }
 
 // hooksInstalled reports whether the file contains any tap-owned entry.
