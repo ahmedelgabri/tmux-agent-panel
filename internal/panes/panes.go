@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rivo/uniseg"
+
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
@@ -148,20 +150,17 @@ func BuildRows(lines []string, o Options) []Row {
 			if e.state == "" {
 				e.state = fallbackState(meta, p.Title)
 			}
-			r := []rune(e.task)
-			if len(r) > state.TaskMaxLength {
+			if r := []rune(e.task); len(r) > state.TaskMaxLength {
 				e.task = string(r[:state.TaskMaxLength-1]) + "…"
-				// The truncated task is TaskMaxLength runes: the cut plus "…".
-				r = r[:state.TaskMaxLength]
 			}
-			if len(r) > taskWidth {
-				taskWidth = len(r)
+			if w := uniseg.StringWidth(e.task); w > taskWidth {
+				taskWidth = w
 			}
 		}
-		if w := len([]rune(p.Window)); w > winWidth {
+		if w := uniseg.StringWidth(p.Window); w > winWidth {
 			winWidth = w
 		}
-		if w := len([]rune(name)); w > cmdWidth {
+		if w := uniseg.StringWidth(name); w > cmdWidth {
 			cmdWidth = w
 		}
 		entries = append(entries, e)
@@ -324,8 +323,11 @@ func selectable(rows []Row) bool {
 	return false
 }
 
+// pad counts terminal cells, not runes: CJK and emoji content in tasks or
+// window names occupies two cells per rune, and rune-based padding would
+// misalign the columns after it.
 func pad(s string, width int) string {
-	if n := width - len([]rune(s)); n > 0 {
+	if n := width - uniseg.StringWidth(s); n > 0 {
 		return s + strings.Repeat(" ", n)
 	}
 	return s

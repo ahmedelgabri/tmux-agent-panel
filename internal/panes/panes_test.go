@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rivo/uniseg"
 )
 
 func line(fields ...string) string {
@@ -128,12 +130,36 @@ func TestBuildRowsColumnAlignment(t *testing.T) {
 		t.Errorf("agent row should show the agent name in the command column: %q", agent)
 	}
 	// The path column lines up across agent and plain rows. Offsets are
-	// counted in runes: the glyph columns hold multi-byte characters.
-	agentCol := len([]rune(agent[:strings.Index(agent, "~/code")]))
-	plainCol := len([]rune(plain[:strings.Index(plain, "~/code")]))
-	if agentCol != plainCol {
-		t.Errorf("path columns misaligned (%d vs %d):\n%q\n%q", agentCol, plainCol, agent, plain)
+	// counted in terminal cells, matching what the picker renders.
+	assertPathsAligned(t, agent, plain)
+}
+
+func assertPathsAligned(t *testing.T, a, b string) {
+	t.Helper()
+	aCol := uniseg.StringWidth(a[:strings.Index(a, "~/")])
+	bCol := uniseg.StringWidth(b[:strings.Index(b, "~/")])
+	if aCol != bCol {
+		t.Errorf("path columns misaligned (%d vs %d):\n%q\n%q", aCol, bCol, a, b)
 	}
+}
+
+func TestBuildRowsWideRuneAlignment(t *testing.T) {
+	// CJK and emoji render wider than their rune count suggests, and
+	// grapheme clusters (variation selectors: ❤️, flags: 🇪🇬 🇳🇱) even
+	// measure wrong under per-rune width tables — only uniseg, which the
+	// embedded fzf also renders with, gets all of them right.
+	wide := []string{
+		line("%1", "main:1.1", "编辑器", "nvim", "/Users/x/code", "", "", "nvim", ""),
+		line("%2", "main:1.2", "agent", "claude", "/Users/x/code", "running", "修复 bug ❤️ 🇪🇬 🇳🇱", "t", ""),
+	}
+	rows := BuildRows(wide, Options{Home: "/Users/x"})
+	byID := map[string]Row{}
+	for _, r := range rows {
+		byID[r.PaneID] = r
+	}
+	agent := ansiRe.ReplaceAllString(byID["%2"].Display, "")
+	plain := ansiRe.ReplaceAllString(byID["%1"].Display, "")
+	assertPathsAligned(t, agent, plain)
 }
 
 func TestBuildRowsDisplay(t *testing.T) {
