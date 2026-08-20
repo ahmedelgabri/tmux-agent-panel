@@ -122,7 +122,7 @@ func Run(inPopup bool) error {
 		return nil
 	}
 
-	// Divider rows have an empty pane_id field, making Enter on them a no-op.
+	// The orphan warning row has an empty pane_id field, making Enter on it a no-op.
 	paneID, _, _ := strings.Cut(selected[0], "\t")
 	if strings.HasPrefix(paneID, "%") {
 		return tmux.Run("switch-client", "-Z", "-t", paneID)

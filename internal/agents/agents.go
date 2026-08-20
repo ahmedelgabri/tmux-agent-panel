@@ -18,9 +18,12 @@ import (
 // a single-entry change.
 type Agent struct {
 	Name string
-	// Icon is the picker glyph, in a distinct ANSI slot per agent: Claude
-	// yellow (closest named slot to its orange), Codex cyan, pi magenta.
-	Icon string
+	// Icon is the picker glyph and Color its ANSI slot, distinct per agent:
+	// Claude yellow (closest named slot to its orange), Codex cyan, pi
+	// magenta. The picker composes them so the agent-name column can share
+	// the color.
+	Icon  string
+	Color string
 	// TaskFromTitle marks agents that publish a live task summary in the
 	// pane title (behind a status glyph) — a better task source than the
 	// raw prompt, so their hooks don't store @agent_task and the picker
@@ -45,7 +48,8 @@ func All() []Agent {
 	return []Agent{
 		{
 			Name:          "claude",
-			Icon:          ansi.Yellow + "✳" + ansi.Reset,
+			Icon:          "✳",
+			Color:         ansi.Yellow,
 			TaskFromTitle: true,
 			ConfigPath:    claudeSettingsPath,
 			Install:       installClaude,
@@ -55,7 +59,8 @@ func All() []Agent {
 		},
 		{
 			Name:       "codex",
-			Icon:       ansi.Cyan + "⌬" + ansi.Reset,
+			Icon:       "⌬",
+			Color:      ansi.Cyan,
 			ConfigPath: codexHooksPath,
 			Install:    installCodex,
 			Uninstall:  uninstallCodex,
@@ -64,7 +69,8 @@ func All() []Agent {
 		},
 		{
 			Name:       "pi",
-			Icon:       ansi.Magenta + "π" + ansi.Reset,
+			Icon:       "π",
+			Color:      ansi.Magenta,
 			ConfigPath: piExtensionPath,
 			Install:    installPi,
 			Uninstall:  uninstallPi,

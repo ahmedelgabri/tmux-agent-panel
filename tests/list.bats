@@ -31,6 +31,7 @@ teardown() {
 	# a builtin (read) because an external command would either replace the
 	# process (bash -c execs a lone command) or become the name tmux picks.
 	cp "$(command -v bash)" "$BATS_TEST_TMPDIR/claude"
+	tmx rename-window -t main plainwin
 	tmx new-window -t main -n agentwin "'$BATS_TEST_TMPDIR/claude' -c 'read x'"
 	sleep 0.5
 	pane="$(tmx display-message -t main:agentwin -p '#{pane_id}')"
@@ -41,18 +42,18 @@ teardown() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"▲"* ]]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" == *"──── agents ────"* ]]
+	[[ "$output" == *"plainwin"* ]]
 
 	run "$TAP" __list --agents
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" != *"──── agents ────"* ]]
+	[[ "$output" != *"plainwin"* ]]
 
 	# reload children get the view from FZF_PROMPT instead of a flag
 	FZF_PROMPT='agents » ' run "$TAP" __list
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"review the diff"* ]]
-	[[ "$output" != *"──── agents ────"* ]]
+	[[ "$output" != *"plainwin"* ]]
 }
 
 @test "__list marks agent panes via @agent_name when the command misreports" {

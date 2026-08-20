@@ -5,7 +5,10 @@
 // agents set via hooks/extensions; which agent a pane runs comes from the
 // @agent_name option the hooks set, falling back to the pane's current
 // command for panes that never reported one. Agent rows sort first (blocked,
-// waiting, running, idle), separated from plain panes by divider rows. The
+// waiting, running, idle) above plain panes; all rows share one column
+// layout — window, agent-or-command, status, path — so the grouping reads
+// from the aligned columns rather than from header rows, which fzf's
+// filtering would tear apart anyway. The
 // `_shared` session is skipped: its windows are linked into the named
 // sessions, so listing it would only duplicate rows.
 package panes
@@ -48,8 +51,8 @@ type Pane struct {
 }
 
 // Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
-// (used by --preview and the preview label). Divider rows have an empty
-// PaneID, making selecting them a no-op.
+// (used by --preview and the preview label). The orphan warning row has an
+// empty PaneID, making selecting it a no-op.
 type Row struct {
 	PaneID  string
 	Addr    string
@@ -91,15 +94,18 @@ func Orphaned(p Pane) bool {
 	return !ok
 }
 
-// BuildRows renders panes into sorted picker rows, dividers included.
+// BuildRows renders panes into one sorted, column-aligned table.
 func BuildRows(lines []string, o Options) []Row {
 	type entry struct {
 		pane    Pane
 		meta    agents.Agent
 		isAgent bool
+		state   string
+		task    string
 	}
 	var entries []entry
-	winWidth, cmdWidth, orphans := 0, 0, 0
+	hasAgents := false
+	winWidth, cmdWidth, taskWidth, orphans := 0, 0, 0, 0
 
 	for _, line := range lines {
 		p, ok := ParsePane(line)
@@ -123,15 +129,37 @@ func BuildRows(lines []string, o Options) []Row {
 		if o.Home != "" && strings.HasPrefix(p.Path, o.Home) {
 			p.Path = "~" + strings.TrimPrefix(p.Path, o.Home)
 		}
+		e := entry{pane: p, meta: meta, isAgent: isAgent}
+		// The name column holds the agent name on agent rows and the pane
+		// command otherwise; it shares one width so the table stays aligned.
+		name := p.Command
+		if isAgent {
+			hasAgents = true
+			name = meta.Name
+			e.state = p.State
+			e.task = p.Task
+			// The task lives in the pane title for TaskFromTitle agents;
+			// the leading status glyph is dropped here.
+			if e.task == "" && meta.TaskFromTitle {
+				e.task = stripFirstWord(p.Title)
+			}
+			if e.state == "" {
+				e.state = fallbackState(meta, p.Title)
+			}
+			if r := []rune(e.task); len(r) > state.TaskMaxLength {
+				e.task = string(r[:state.TaskMaxLength-1]) + "…"
+			}
+			if w := len([]rune(e.task)); w > taskWidth {
+				taskWidth = w
+			}
+		}
 		if w := len([]rune(p.Window)); w > winWidth {
 			winWidth = w
 		}
-		if !isAgent {
-			if w := len([]rune(p.Command)); w > cmdWidth {
-				cmdWidth = w
-			}
+		if w := len([]rune(name)); w > cmdWidth {
+			cmdWidth = w
 		}
-		entries = append(entries, entry{p, meta, isAgent})
+		entries = append(entries, e)
 	}
 
 	spinner := spinnerFrames[o.Frame%len(spinnerFrames)]
@@ -158,48 +186,35 @@ func BuildRows(lines []string, o Options) []Row {
 			icon = ansi.Gray + "⧉" + ansi.Reset
 		}
 		if e.isAgent {
-			icon = e.meta.Icon
+			icon = e.meta.Color + e.meta.Icon + ansi.Reset
 		}
 		lead := mark + " " + icon + "  " + pad(p.Window, winWidth) + "  "
 
 		if e.isAgent {
-			st := p.State
-			title := p.Task
-			// The task lives in the pane title for TaskFromTitle agents;
-			// the leading status glyph is dropped here.
-			if title == "" && e.meta.TaskFromTitle {
-				title = stripFirstWord(p.Title)
-			}
-			if st == "" {
-				st = fallbackState(e.meta, p.Title)
-			}
-			if r := []rune(title); len(r) > state.TaskMaxLength {
-				title = string(r[:state.TaskMaxLength-1]) + "…"
-			}
-			display := lead + stateGlyph(st, spinner) + " " + title + "  " + ansi.Gray + p.Path + ansi.Reset
+			display := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  " +
+				stateGlyph(e.state, spinner) + " " + pad(e.task, taskWidth) + "  " +
+				ansi.Gray + p.Path + ansi.Reset
 			agentRows = append(agentRows, agentRow{
 				row:  Row{PaneID: p.ID, Addr: p.Addr, Display: display},
-				rank: state.ByName(st).Rank,
+				rank: state.ByName(e.state).Rank,
 			})
 		} else {
-			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + "  " + ansi.Gray + p.Path + ansi.Reset
+			// Blank glyph and task slots (2 + taskWidth) plus the column
+			// separators (2 + 2) keep the path column aligned with agent rows.
+			gap := "  "
+			if hasAgents {
+				gap = strings.Repeat(" ", taskWidth+6)
+			}
+			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + gap + ansi.Gray + p.Path + ansi.Reset
 			plainRows = append(plainRows, Row{PaneID: p.ID, Addr: p.Addr, Display: display})
 		}
 	}
 
 	sort.SliceStable(agentRows, func(a, b int) bool { return agentRows[a].rank < agentRows[b].rank })
 
-	// Dividers only make sense when both groups are present.
-	divided := len(agentRows) > 0 && len(plainRows) > 0
-	rows := make([]Row, 0, len(entries)+2)
-	if divided {
-		rows = append(rows, Row{Display: ansi.Gray + "──── agents ────" + ansi.Reset})
-	}
+	rows := make([]Row, 0, len(entries)+1)
 	for _, a := range agentRows {
 		rows = append(rows, a.row)
-	}
-	if divided {
-		rows = append(rows, Row{Display: ansi.Gray + "──── panes ─────" + ansi.Reset})
 	}
 	rows = append(rows, plainRows...)
 	// Orphaned panes are never guessed into agent rows (a stale option

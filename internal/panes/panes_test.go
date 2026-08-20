@@ -1,6 +1,7 @@
 package panes
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -87,12 +88,12 @@ func TestAgentNameOverride(t *testing.T) {
 
 func TestBuildRowsOrdering(t *testing.T) {
 	rows := BuildRows(fixture, Options{Home: "/Users/x"})
-	if len(rows) != 7 {
-		t.Fatalf("got %d rows, want 7 (5 panes + 2 dividers)", len(rows))
+	if len(rows) != 5 {
+		t.Fatalf("got %d rows, want 5 (no divider rows)", len(rows))
 	}
-	// Agents divider, then blocked codex, running claude, idle pi, panes
-	// divider, then plain panes in original order.
-	wantIDs := []string{"", "%4", "%2", "%5", "", "%1", "%3"}
+	// Blocked codex, running claude, idle pi, then plain panes in original
+	// order.
+	wantIDs := []string{"%4", "%2", "%5", "%1", "%3"}
 	for i, want := range wantIDs {
 		if rows[i].PaneID != want {
 			t.Errorf("row %d: pane %q, want %q", i, rows[i].PaneID, want)
@@ -107,19 +108,31 @@ func TestBuildRowsAgentsOnly(t *testing.T) {
 	}
 	for _, r := range rows {
 		if r.PaneID == "" {
-			t.Errorf("agents-only view must not contain dividers")
+			t.Errorf("agents-only view must not contain non-selectable rows")
 		}
 	}
 }
 
-func TestBuildRowsNoDividersWhenHomogeneous(t *testing.T) {
-	plain := []string{fixture[0], fixture[2]}
-	if rows := BuildRows(plain, Options{}); len(rows) != 2 {
-		t.Errorf("plain-only: got %d rows, want 2 (no dividers)", len(rows))
+var ansiRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+func TestBuildRowsColumnAlignment(t *testing.T) {
+	rows := BuildRows(fixture, Options{Home: "/Users/x"})
+	byID := map[string]Row{}
+	for _, r := range rows {
+		byID[r.PaneID] = r
 	}
-	agents := []string{fixture[1], fixture[3]}
-	if rows := BuildRows(agents, Options{}); len(rows) != 2 {
-		t.Errorf("agents-only content: got %d rows, want 2 (no dividers)", len(rows))
+	agent := ansiRe.ReplaceAllString(byID["%2"].Display, "")
+	plain := ansiRe.ReplaceAllString(byID["%1"].Display, "")
+	// The name column shows the agent name, not the raw command.
+	if !strings.Contains(agent, "claude") || strings.Contains(agent, ".claude-wrapped") {
+		t.Errorf("agent row should show the agent name in the command column: %q", agent)
+	}
+	// The path column lines up across agent and plain rows. Offsets are
+	// counted in runes: the glyph columns hold multi-byte characters.
+	agentCol := len([]rune(agent[:strings.Index(agent, "~/code")]))
+	plainCol := len([]rune(plain[:strings.Index(plain, "~/code")]))
+	if agentCol != plainCol {
+		t.Errorf("path columns misaligned (%d vs %d):\n%q\n%q", agentCol, plainCol, agent, plain)
 	}
 }
 
