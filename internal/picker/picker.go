@@ -60,19 +60,29 @@ func Run(inPopup bool) error {
 	sock := filepath.Join(os.TempDir(), fmt.Sprintf("tap-%d.sock", os.Getpid()))
 	defer os.Remove(sock)
 
-	opts, err := fzf.ParseOptions(false, buildArgs(self, sock))
-	if err != nil {
-		return err
-	}
-
 	// The pane the picker was opened from cannot change while the popup is
 	// open; resolve it once and let every reload child inherit it.
 	if current, err := tmux.Output("display-message", "-p", "#{pane_id}"); err == nil {
 		os.Setenv(panes.CurrentPaneEnv, current)
 	}
 
+	// The picker opens focused on agents; ctrl-a widens to all panes. With
+	// no agent panes the focused view would be empty, so start on all.
 	home, _ := os.UserHomeDir()
-	initial, err := panes.List(false, home)
+	prompt := PromptAgents
+	initial, err := panes.List(true, home)
+	if err != nil {
+		return err
+	}
+	if !hasSelectable(initial) {
+		prompt = PromptAll
+		initial, err = panes.List(false, home)
+		if err != nil {
+			return err
+		}
+	}
+
+	opts, err := fzf.ParseOptions(false, buildArgs(self, sock, prompt))
 	if err != nil {
 		return err
 	}
@@ -130,7 +140,18 @@ func Run(inPopup bool) error {
 	return nil
 }
 
-func buildArgs(self, sock string) []string {
+// hasSelectable reports whether any rendered row targets a real pane —
+// non-selectable rows (spacer, orphan warning) have an empty pane_id field.
+func hasSelectable(list string) bool {
+	for _, line := range strings.Split(list, "\n") {
+		if strings.HasPrefix(line, "%") {
+			return true
+		}
+	}
+	return false
+}
+
+func buildArgs(self, sock, prompt string) []string {
 	reload := reloadAction(self)
 	return []string{
 		"--ansi",
@@ -142,7 +163,7 @@ func buildArgs(self, sock string) []string {
 		"--gutter", " ",
 		"--gutter-raw", " ",
 		"--listen", sock,
-		"--prompt", PromptAll,
+		"--prompt", prompt,
 		"--pointer", "▶",
 		"--info", "inline-right",
 		"--separator", "",
@@ -150,7 +171,7 @@ func buildArgs(self, sock string) []string {
 		// the blank header.
 		"--header", " ",
 		"--header-border", "line",
-		"--header-label", "ctrl-a agents · ? preview · kill: ctrl-x pane · ctrl-w window · ctrl-q session",
+		"--header-label", "ctrl-a all/agents · ? preview · kill: ctrl-x pane · ctrl-w window · ctrl-q session",
 		"--color", "bg+:-1,border:0,label:4,header-border:0,header-label:8",
 		"--bind", "?:toggle-preview",
 		"--bind", fmt.Sprintf("ctrl-a:transform:'%s' __toggle", self),

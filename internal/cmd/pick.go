@@ -11,10 +11,11 @@ var inPopup bool
 var pickCmd = &cobra.Command{
 	Use:   "pick",
 	Short: "Open the pane picker",
-	Long: `Opens the agent-aware pane picker in a tmux popup. Agent panes are
-grouped first, sorted blocked → waiting → running → idle, and the list
-live-refreshes while open. Enter switches to the selected pane; ctrl-a
-toggles an agents-only view; ctrl-x/ctrl-w/ctrl-q kill the highlighted
+	Long: `Opens the agent-aware pane picker in a tmux popup. It starts focused
+on agent panes, sorted blocked → waiting → running → idle, and the list
+live-refreshes while open (with no agent panes it starts on all panes).
+Enter switches to the selected pane; ctrl-a toggles between the agents
+and all-panes views; ctrl-x/ctrl-w/ctrl-q kill the highlighted
 pane/window/session.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

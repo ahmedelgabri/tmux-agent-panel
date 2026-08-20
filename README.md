@@ -39,7 +39,7 @@ Open the picker from any shell inside tmux:
 tap pick
 ```
 
-Inside the picker: `Enter` switches to the pane, `ctrl-a` toggles an agents-only view, `?` toggles the preview, and `ctrl-x`/`ctrl-w`/`ctrl-q` kill the highlighted pane/window/session (no confirmation). The list live-refreshes 5×/second while open, so states, tasks, and the spinner animate in place.
+The picker opens focused on agent panes (all panes if none are running). Inside it: `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, `?` toggles the preview, and `ctrl-x`/`ctrl-w`/`ctrl-q` kill the highlighted pane/window/session (no confirmation). The list live-refreshes 5×/second while open, so states, tasks, and the spinner animate in place.
 
 Bind it wherever you like, e.g. a zsh widget on `C-Space`:
 

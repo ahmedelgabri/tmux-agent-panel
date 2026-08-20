@@ -18,7 +18,7 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 - **One-command hook installation** with `tap install`: idempotent, backed up, reversible with `tap uninstall`
 - **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)
 - **Embedded fzf** — no fzf installation, no version skew
-- **Agents-only view** (`ctrl-a`), pane preview (`?`), kill pane/window/session from the picker
+- **Agent-focused by default**, with `ctrl-a` toggling all panes; pane preview (`?`), kill pane/window/session from the picker
 - **Diagnostics** with `tap doctor`
 
 ## Quick Start
