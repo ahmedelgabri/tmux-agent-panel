@@ -8,7 +8,8 @@
 // waiting, running, idle) above plain panes; all rows share one column
 // layout — window, agent-or-command, status, path — so the grouping reads
 // from the aligned columns rather than from header rows, which fzf's
-// filtering would tear apart anyway. The
+// filtering would tear apart anyway; a blank spacer row sets the agent
+// block apart. The
 // `_shared` session is skipped: its windows are linked into the named
 // sessions, so listing it would only duplicate rows.
 package panes
@@ -212,9 +213,15 @@ func BuildRows(lines []string, o Options) []Row {
 
 	sort.SliceStable(agentRows, func(a, b int) bool { return agentRows[a].rank < agentRows[b].rank })
 
-	rows := make([]Row, 0, len(entries)+1)
+	rows := make([]Row, 0, len(entries)+2)
 	for _, a := range agentRows {
 		rows = append(rows, a.row)
+	}
+	// A blank spacer sets the agent block apart when both groups are
+	// present; its empty PaneID makes Enter on it a no-op, and any query
+	// filters it out.
+	if len(agentRows) > 0 && len(plainRows) > 0 {
+		rows = append(rows, Row{})
 	}
 	rows = append(rows, plainRows...)
 	// Orphaned panes are never guessed into agent rows (a stale option

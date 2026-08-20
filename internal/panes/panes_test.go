@@ -88,12 +88,12 @@ func TestAgentNameOverride(t *testing.T) {
 
 func TestBuildRowsOrdering(t *testing.T) {
 	rows := BuildRows(fixture, Options{Home: "/Users/x"})
-	if len(rows) != 5 {
-		t.Fatalf("got %d rows, want 5 (no divider rows)", len(rows))
+	if len(rows) != 6 {
+		t.Fatalf("got %d rows, want 6 (5 panes + spacer)", len(rows))
 	}
-	// Blocked codex, running claude, idle pi, then plain panes in original
-	// order.
-	wantIDs := []string{"%4", "%2", "%5", "%1", "%3"}
+	// Blocked codex, running claude, idle pi, a blank spacer, then plain
+	// panes in original order.
+	wantIDs := []string{"%4", "%2", "%5", "", "%1", "%3"}
 	for i, want := range wantIDs {
 		if rows[i].PaneID != want {
 			t.Errorf("row %d: pane %q, want %q", i, rows[i].PaneID, want)
