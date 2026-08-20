@@ -69,17 +69,13 @@ func Run(inPopup bool) error {
 	// The picker opens focused on agents; ctrl-a widens to all panes. With
 	// no agent panes the focused view would be empty, so start on all.
 	home, _ := os.UserHomeDir()
-	prompt := PromptAgents
-	initial, err := panes.List(true, home)
+	initial, agentsView, err := panes.ListInitial(home)
 	if err != nil {
 		return err
 	}
-	if !hasSelectable(initial) {
-		prompt = PromptAll
-		initial, err = panes.List(false, home)
-		if err != nil {
-			return err
-		}
+	prompt := PromptAll
+	if agentsView {
+		prompt = PromptAgents
 	}
 
 	opts, err := fzf.ParseOptions(false, buildArgs(self, sock, prompt))
@@ -132,23 +128,13 @@ func Run(inPopup bool) error {
 		return nil
 	}
 
-	// The orphan warning row has an empty pane_id field, making Enter on it a no-op.
+	// Non-selectable rows (spacer, orphan warning) have an empty pane_id
+	// field, making Enter on them a no-op.
 	paneID, _, _ := strings.Cut(selected[0], "\t")
 	if strings.HasPrefix(paneID, "%") {
 		return tmux.Run("switch-client", "-Z", "-t", paneID)
 	}
 	return nil
-}
-
-// hasSelectable reports whether any rendered row targets a real pane —
-// non-selectable rows (spacer, orphan warning) have an empty pane_id field.
-func hasSelectable(list string) bool {
-	for _, line := range strings.Split(list, "\n") {
-		if strings.HasPrefix(line, "%") {
-			return true
-		}
-	}
-	return false
 }
 
 func buildArgs(self, sock, prompt string) []string {

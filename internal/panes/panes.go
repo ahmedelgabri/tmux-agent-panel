@@ -52,8 +52,9 @@ type Pane struct {
 }
 
 // Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
-// (used by --preview and the preview label). The orphan warning row has an
-// empty PaneID, making selecting it a no-op.
+// (used by --preview and the preview label). Non-selectable rows (the
+// spacer, the orphan warning) have an empty PaneID, making selecting them
+// a no-op.
 type Row struct {
 	PaneID  string
 	Addr    string
@@ -147,11 +148,14 @@ func BuildRows(lines []string, o Options) []Row {
 			if e.state == "" {
 				e.state = fallbackState(meta, p.Title)
 			}
-			if r := []rune(e.task); len(r) > state.TaskMaxLength {
+			r := []rune(e.task)
+			if len(r) > state.TaskMaxLength {
 				e.task = string(r[:state.TaskMaxLength-1]) + "…"
+				// The truncated task is TaskMaxLength runes: the cut plus "…".
+				r = r[:state.TaskMaxLength]
 			}
-			if w := len([]rune(e.task)); w > taskWidth {
-				taskWidth = w
+			if len(r) > taskWidth {
+				taskWidth = len(r)
 			}
 		}
 		if w := len([]rune(p.Window)); w > winWidth {
@@ -164,6 +168,12 @@ func BuildRows(lines []string, o Options) []Row {
 	}
 
 	spinner := spinnerFrames[o.Frame%len(spinnerFrames)]
+	// Plain rows leave the agent rows' status slot — glyph, its trailing
+	// space, and the padded task — blank so the path column stays aligned.
+	plainGap := "  "
+	if hasAgents {
+		plainGap = "  " + pad("", taskWidth+2) + "  "
+	}
 	// Agent rows sort by state rank (blocked first) but keep their
 	// original order within a state; plain rows keep list-panes order.
 	type agentRow struct {
@@ -200,13 +210,7 @@ func BuildRows(lines []string, o Options) []Row {
 				rank: state.ByName(e.state).Rank,
 			})
 		} else {
-			// Blank glyph and task slots (2 + taskWidth) plus the column
-			// separators (2 + 2) keep the path column aligned with agent rows.
-			gap := "  "
-			if hasAgents {
-				gap = strings.Repeat(" ", taskWidth+6)
-			}
-			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + gap + ansi.Gray + p.Path + ansi.Reset
+			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + plainGap + ansi.Gray + p.Path + ansi.Reset
 			plainRows = append(plainRows, Row{PaneID: p.ID, Addr: p.Addr, Display: display})
 		}
 	}
@@ -267,24 +271,57 @@ func Fetch() ([]Pane, error) {
 	return ps, nil
 }
 
-// List shells out to tmux and renders the current rows. The spinner frame
-// comes from a 200ms clock so consecutive reloads animate it.
-func List(agentsOnly bool, home string) (string, error) {
-	out, err := listOutput()
-	if err != nil {
-		return "", err
-	}
+// listOptions resolves the ambient inputs. The spinner frame comes from a
+// 200ms clock so consecutive reloads animate it.
+func listOptions(agentsOnly bool, home string) Options {
 	current := os.Getenv(CurrentPaneEnv)
 	if current == "" {
 		current, _ = tmux.Output("display-message", "-p", "#{pane_id}")
 	}
-	o := Options{
+	return Options{
 		AgentsOnly:  agentsOnly,
 		Frame:       int(time.Now().UnixMicro() / 200000),
 		CurrentPane: current,
 		Home:        home,
 	}
-	return Render(BuildRows(strings.Split(out, "\n"), o)), nil
+}
+
+// List shells out to tmux and renders the current rows.
+func List(agentsOnly bool, home string) (string, error) {
+	out, err := listOutput()
+	if err != nil {
+		return "", err
+	}
+	return Render(BuildRows(strings.Split(out, "\n"), listOptions(agentsOnly, home))), nil
+}
+
+// ListInitial renders the picker's startup view from a single tmux round
+// trip: agents-only when any agent pane exists, all panes otherwise — a
+// focused view with nothing to select would open empty. The boolean
+// reports which view was chosen.
+func ListInitial(home string) (string, bool, error) {
+	out, err := listOutput()
+	if err != nil {
+		return "", false, err
+	}
+	lines := strings.Split(out, "\n")
+	o := listOptions(true, home)
+	if rows := BuildRows(lines, o); selectable(rows) {
+		return Render(rows), true, nil
+	}
+	o.AgentsOnly = false
+	return Render(BuildRows(lines, o)), false, nil
+}
+
+// selectable reports whether any row targets a real pane — non-selectable
+// rows (spacer, orphan warning) leave PaneID empty.
+func selectable(rows []Row) bool {
+	for _, r := range rows {
+		if r.PaneID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func pad(s string, width int) string {
