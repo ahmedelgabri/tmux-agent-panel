@@ -6,7 +6,6 @@ package tmux
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,9 +20,7 @@ func InsideTmux() bool {
 // on options that were never set are indistinguishable from real failures,
 // so callers that don't care pass the error through to a blank identifier.
 func Run(args ...string) error {
-	cmd := exec.Command("tmux", args...)
-	cmd.Stdout = io.Discard
-	return run(cmd)
+	return run(exec.Command("tmux", args...))
 }
 
 // Output executes a tmux command and returns its stdout without the

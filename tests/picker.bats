@@ -115,6 +115,40 @@ task_updated() {
 	[ "$(tmx display-message -p -t "$TMUX_PANE" '#{pane_id}')" = "$TMUX_PANE" ]
 }
 
+@test "picker accepts the selected pane and exits" {
+	# A control-mode client lets switch-client succeed without a real terminal.
+	mkfifo "$TMUX_TEST_DIR/client.in"
+	(
+		exec 3<>"$TMUX_TEST_DIR/client.in"
+		tmx -C attach-session -t main <&3 >"$TMUX_TEST_DIR/client.log"
+	) &
+	wait_for client_attached
+	tmx set-option -w -t "$PICKER" remain-on-exit on
+	wait_for select_second
+	wait_for finish_picker accept
+	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead_status}')" = 0 ]
+	[ "$(tmx list-clients -F '#{pane_id}')" = "$SECOND" ]
+}
+
+@test "picker cancellation exits without selecting a pane" {
+	tmx set-option -w -t "$PICKER" remain-on-exit on
+	wait_for finish_picker abort
+	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead_status}')" = 0 ]
+}
+
+client_attached() {
+	tmx list-clients -F '#{client_control_mode}' | grep -qx 1
+}
+
+picker_exited() {
+	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead}')" = 1 ]
+}
+
+finish_picker() {
+	if picker_exited; then return 0; fi
+	picker_action "$1" && picker_exited
+}
+
 second_gone() {
 	local panes
 	panes="$(tmx list-panes -a -F '#{pane_id}')" || return 1

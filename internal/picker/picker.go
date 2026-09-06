@@ -25,7 +25,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -87,27 +86,16 @@ func Run(inPopup bool) error {
 		return err
 	}
 
-	inputChan := make(chan string)
-	go func() {
-		for _, line := range strings.Split(strings.TrimRight(initial, "\n"), "\n") {
-			inputChan <- line
-		}
-		close(inputChan)
-	}()
+	lines := strings.Split(strings.TrimRight(initial, "\n"), "\n")
+	opts.Input = make(chan string, len(lines))
+	for _, line := range lines {
+		opts.Input <- line
+	}
+	close(opts.Input)
 
-	outputChan := make(chan string, 8)
+	// fzf finishes printing selections before Run returns.
 	var selected []string
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for s := range outputChan {
-			selected = append(selected, s)
-		}
-	}()
-
-	opts.Input = inputChan
-	opts.Output = outputChan
+	opts.Printer = func(s string) { selected = append(selected, s) }
 
 	stop := make(chan struct{})
 	go refreshLoop(sock, self, stop)
@@ -120,10 +108,6 @@ func Run(inPopup bool) error {
 	signal.Reset(os.Interrupt, syscall.SIGTERM)
 
 	close(stop)
-	// fzf does not close the Output channel, so the goroutine draining it
-	// would block forever on the range loop. Close it now that fzf is done.
-	close(outputChan)
-	wg.Wait()
 
 	if err != nil && code != fzf.ExitInterrupt {
 		return err
