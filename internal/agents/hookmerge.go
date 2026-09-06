@@ -324,16 +324,14 @@ func backup(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(path)
-		return err
+	_, err = f.Write(data)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
 	}
-	if err := f.Close(); err != nil {
+	if err != nil {
 		os.Remove(path)
-		return err
 	}
-	return nil
+	return err
 }
 
 func writeJSON(path string, root map[string]any) error {

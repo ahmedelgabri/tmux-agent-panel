@@ -43,16 +43,17 @@ func Doctor() []Check {
 		installed := a.Installed()
 		current := installed && a.Current()
 		native, nativeErr := a.Native()
-		ok := !detected || ((current || native != "") && nativeErr == nil && (!installed || current))
+		ok := current || native != ""
 		if detected {
 			b.WriteString("binary found")
 		} else {
 			b.WriteString("binary not found")
 		}
 		switch {
-		case installed && current:
+		case current:
 			fmt.Fprintf(&b, ", hooks installed (%s)", path)
 		case installed:
+			ok = false
 			fmt.Fprintf(&b, ", hooks outdated. Run `tap install` (%s)", path)
 		case native == "" && nativeErr == nil:
 			fmt.Fprintf(&b, ", user hooks not installed (%s)", path)
@@ -64,9 +65,10 @@ func Doctor() []Check {
 			}
 		}
 		if nativeErr != nil {
+			ok = false
 			fmt.Fprintf(&b, ", %v", nativeErr)
 		}
-		checks = append(checks, Check{a.Name, ok, b.String()})
+		checks = append(checks, Check{a.Name, !detected || ok, b.String()})
 	}
 	return checks
 }
