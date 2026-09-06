@@ -16,7 +16,10 @@ setup() {
 teardown() {
 	if [ -z "${BATS_TEST_COMPLETED:-}" ]; then
 		if [ -S "${FZF_SOCKET:-}" ]; then picker_status >&2 || true; fi
-		if [ -n "${PICKER:-}" ]; then tmx capture-pane -p -t "$PICKER" >&2 || true; fi
+		if [ -n "${PICKER:-}" ]; then
+			tmx display-message -p -t "$PICKER" 'dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal}' >&2 || true
+			tmx capture-pane -p -t "$PICKER" >&2 || true
+		fi
 	fi
 	stop_server
 }
@@ -136,12 +139,32 @@ task_updated() {
 	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead_status}')" = 0 ]
 }
 
+@test "picker exit check distinguishes pty closure from process completion" {
+	(
+		# Keep the simulated replies local so teardown still uses the real tmux.
+		tmx() {
+			case "$*" in
+			*'#{pane_dead}') echo 1 ;;
+			*) printf '%s\n' "$exit_status" ;;
+			esac
+		}
+		exit_status=''
+		run picker_exited
+		[ "$status" -ne 0 ]
+		exit_status=0
+		picker_exited
+		exit_status=TERM
+		picker_exited
+	)
+}
+
 client_attached() {
 	tmx list-clients -F '#{client_control_mode}' | grep -qx 1
 }
 
 picker_exited() {
-	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead}')" = 1 ]
+	# A closed pty does not mean tmux has collected the process exit status.
+	[ -n "$(tmx display-message -p -t "$PICKER" '#{pane_dead_status}#{pane_dead_signal}')" ]
 }
 
 finish_picker() {
