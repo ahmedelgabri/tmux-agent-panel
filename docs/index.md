@@ -15,11 +15,11 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
 - **Live agent status** per pane: green spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle — refreshed 5×/second while the picker is open
 - **Blocked-first ordering** so permission requests surface immediately
-- **One-command hook installation** with `tap install`: idempotent, backed up, reversible with `tap uninstall`
+- **Hook installation** with `tap install` preserves the original JSON configs in backups. Reinstall is idempotent; `tap uninstall` removes direct tap hooks and the managed pi extension. The pi extension is overwritten without a backup.
 - **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)
 - **Embedded fzf** — no fzf installation, no version skew
-- **Agent-focused by default**, with `ctrl-a` toggling all panes; pane preview (`?`), kill pane/window/session from the picker
-- **Diagnostics** with `tap doctor`
+- **Agent-focused by default.** `ctrl-a` toggles all panes and `?` toggles the preview. Selection follows the pane across reordered updates. `ctrl-x` kills a pane immediately; `ctrl-w` and `ctrl-q` ask for confirmation before killing a window or session.
+- **Diagnostics** with `tap doctor` check user-scoped direct hooks and native plugin/package installs. Project-scoped installs and one-session CLI overrides are not checked.
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ fi
 
 ## How it works
 
-Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`) through hooks that invoke `tap state` — the single writer of the protocol across all three agents. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. Which agent a pane runs is never stored — the picker derives it from the pane's current command.
+Agents report state into pane-scoped tmux user options through hooks that invoke `tap state`, the single writer across all three agents. `@agent_state` records activity, `@agent_task` records the task, and `@agent_name` identifies the agent. Hooks inherit `$TMUX_PANE` from the agent process to target the right pane. The picker prefers the recorded identity and falls back to the pane's current command when no recognized agent name is stored.
 
 | Agent       | Integration                                | States                                     |
 | ----------- | ------------------------------------------ | ------------------------------------------ |

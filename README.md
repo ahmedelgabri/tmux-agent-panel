@@ -22,14 +22,14 @@ nix run github:ahmedelgabri/tmux-agent-panel
 go build -o tap ./cmd/tap/
 ```
 
-Then wire the agent hooks — this is idempotent, backs up every file it touches, and only modifies agents whose binary is on `PATH` (force a subset with `--claude`, `--codex`, `--pi`):
+Then wire the agent hooks. Installation is idempotent, preserves a backup of each original JSON config, and only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`. The pi extension is overwritten without a backup.
 
 ```sh
 tap install
 tap doctor # verify the wiring
 ```
 
-`tap uninstall` removes exactly what `install` added and nothing else. Files managed by Nix/Home Manager (store symlinks) are refused with a pointer to declarative wiring instead.
+`tap uninstall` removes direct tap hook invocations and the tap-managed pi extension. It leaves other hooks and native plugin/package installs alone. Files managed by Nix/Home Manager are refused with a pointer to declarative wiring instead.
 
 ## Usage
 
@@ -39,7 +39,7 @@ Open the picker from any shell inside tmux:
 tap pick
 ```
 
-The picker opens focused on agent panes (all panes if none are running). Inside it: `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, `?` toggles the preview, and `ctrl-x`/`ctrl-w`/`ctrl-q` kill the highlighted pane/window/session (no confirmation). The list live-refreshes 5×/second while open, so states, tasks, and the spinner animate in place.
+The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. The list refreshes five times per second while open; selection follows the pane ID when state changes reorder the rows.
 
 Bind it wherever you like, e.g. a zsh widget on `C-Space`:
 
@@ -83,7 +83,7 @@ pi install https://github.com/ahmedelgabri/tmux-agent-panel
 pi -e git:github.com/ahmedelgabri/tmux-agent-panel
 ```
 
-Pick one channel per agent — either the plugin or `tap install`, not both, or the hooks fire twice (harmless but wasteful).
+Pick one channel per agent, either the plugin or `tap install`, to avoid duplicate hook calls. `tap doctor` recognizes user-scoped direct hooks and enabled native installations, checks their files against the bundled integration, and reports when both channels are wired. Update native installs through the agent's package manager, not `tap install`. Project-scoped installs, managed settings, and one-session CLI overrides are outside doctor's checks.
 
 ## How it works
 
@@ -114,7 +114,7 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 
 ## Notes and caveats
 
-- `tap install` round-trips JSON configs through Go's encoder: key order and indentation are normalized. A backup (`*.tap.bak`) is written next to each file before the first modification. Symlinked config files are followed — writes land in the target and the symlink stays intact.
+- `tap install` splices hooks into existing JSON configs without reformatting unrelated content. It saves the original config to `*.tap.bak` before the first modification; reinstall and uninstall never overwrite that backup. Symlinked JSON configs are followed so writes land in the target and the symlink stays intact. The pi extension is replaced wholesale without a backup.
 - Installed hooks invoke `tap` from `PATH` (same commands the plugins ship), so upgrading or moving the binary never breaks them; `tap doctor` checks that `tap` is actually on `PATH`.
 - The Claude hook set needs Claude Code ≥ 2.1.78 (when the newest wired event, `StopFailure`, shipped): before 2.1.101 an unknown hook event made Claude ignore the entire settings.json, so `tap install` refuses versions that predate any wired event rather than risk the user's config.
 - Claude's `blocked` fires immediately via the `PermissionRequest` hook (the `permission_prompt` notification only fires after a few seconds of user inactivity, and still routes to `blocked` as reinforcement). Approving a request runs the tool without re-firing `PreToolUse`, so `PostToolUse`/`PostToolUseFailure` map to `running` to clear `blocked` once the tool reports back; a denial clears on the agent's next tool call or `Stop`.
@@ -138,6 +138,12 @@ just check # vet + staticcheck + unit tests (race) + bats E2E + formatting + ver
 Successful push CI runs on `main` trigger releases from the exact tested commit, unless the commit message contains `[skip release]` or the version tag already exists. Release publication and Homebrew updates share a [GitHub concurrency queue](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) with `queue: max`, so a third run does not replace a pending release.
 
 GitHub retains at most 100 pending runs in this group and cancels additional runs. Rerun those canceled release workflows once capacity is available. The queue follows arrival order, not version order; it does not guarantee publication of every version under failures or queue overflow.
+
+### Refresh benchmark
+
+Run `just bench-refresh --benchtime=2s --count=3` to compare the current shell/tap/tmux reload command with in-process pane listing. The benchmark builds a temporary binary and uses a private tmux server; it never targets your running server.
+
+On an Apple M4 Max with Go 1.26.4 and tmux 3.7b, one active agent pane took 11.4 to 13.6 ms per full reload versus 3.77 to 3.88 ms for in-process listing. These are wall-clock timings, not CPU usage, and exclude fzf rendering and HTTP delivery. The 200 ms polling interval remains unchanged. Eliminating command startup would save time, but would also require a different reload transport; measure larger pane sets before adding that complexity.
 
 ## License
 
