@@ -14,6 +14,10 @@ test *args:
 test-race *args:
     go test -race {{ args }} ./...
 
+# Compare refresh command overhead on a private tmux server
+bench-refresh *args:
+    go test ./internal/picker -run '^$' -bench '^BenchmarkRefresh$' -benchmem {{ args }}
+
 # Run E2E tests (bats)
 test-e2e *args: build
     bats {{ args }} tests/
