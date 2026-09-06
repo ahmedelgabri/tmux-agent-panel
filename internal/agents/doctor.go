@@ -42,7 +42,8 @@ func Doctor() []Check {
 		detected := a.Detected()
 		installed := a.Installed()
 		current := installed && a.Current()
-		ok := !detected || current
+		native, nativeErr := a.Native()
+		ok := !detected || ((current || native != "") && nativeErr == nil && (!installed || current))
 		if detected {
 			b.WriteString("binary found")
 		} else {
@@ -53,8 +54,17 @@ func Doctor() []Check {
 			fmt.Fprintf(&b, ", hooks installed (%s)", path)
 		case installed:
 			fmt.Fprintf(&b, ", hooks outdated. Run `tap install` (%s)", path)
-		default:
-			fmt.Fprintf(&b, ", hooks not installed (%s)", path)
+		case native == "" && nativeErr == nil:
+			fmt.Fprintf(&b, ", user hooks not installed (%s)", path)
+		}
+		if native != "" {
+			fmt.Fprintf(&b, ", %s", native)
+			if installed {
+				b.WriteString("; both install channels are wired, disable one to avoid duplicate hooks")
+			}
+		}
+		if nativeErr != nil {
+			fmt.Fprintf(&b, ", %v", nativeErr)
 		}
 		checks = append(checks, Check{a.Name, ok, b.String()})
 	}
