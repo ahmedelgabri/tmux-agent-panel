@@ -7,13 +7,13 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 ## Layout
 
 - `cmd/tap/` — main entry point
-- `internal/cmd/` — cobra commands (`pick`, `state`, `install`, `uninstall`, `doctor`, hidden `__list`/`__reload`/`__toggle`)
+- `internal/cmd/` — cobra commands (`pick`, `state`, `install`, `uninstall`, `doctor`, hidden `__list`/`__toggle`)
 - `internal/panes/` — pane listing and row rendering (the picker's model)
 - `internal/picker/` — embedded fzf UI (`github.com/junegunn/fzf/src`)
 - `internal/state/` — writes `@agent_state`/`@agent_task` pane options
 - `internal/agents/` — hook installers for Claude Code, Codex, and pi
 - `internal/tmux/` — thin tmux command wrapper
-- `tests/` — bats end-to-end tests (run against a scratch tmux server)
+- `tests/` — bats end-to-end tests, including picker tracking and confirmation through fzf's HTTP API; every test uses an explicit private tmux socket
 - `.claude-plugin/` + `plugins/` — plugin marketplace for Claude Code (`tap`) and Codex (`tap-codex`); the hooks.json files are the single source of truth — `tap install` embeds them (`plugins/embed.go`) and merges them verbatim, so hook commands invoke `tap` from `PATH` in both channels
 - `.agents/plugins/marketplace.json` — Codex's native marketplace (per developers.openai.com/plugins: object-form `source`, unlike the Claude schema, so it cannot be a symlink to the Claude file); lists `tap-codex` only. `plugins/tap-codex/.codex-plugin/plugin.json` is a symlink to the Claude manifest (the schemas are compatible). Claude Code knows only `.claude-plugin/`; Codex reads that as a compat fallback when `.agents/` is absent
 - `package.json` + `extensions/` — pi package surface; `extensions/tap-agent-state.ts` is a symlink to `internal/agents/pi_extension.ts` (the canonical copy, embedded into the binary)
