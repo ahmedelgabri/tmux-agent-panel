@@ -4,6 +4,8 @@
 package tmux
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -21,15 +23,31 @@ func InsideTmux() bool {
 func Run(args ...string) error {
 	cmd := exec.Command("tmux", args...)
 	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	return cmd.Run()
+	return run(cmd)
 }
 
 // Output executes a tmux command and returns its stdout without the
 // trailing newline.
 func Output(args ...string) (string, error) {
-	out, err := exec.Command("tmux", args...).Output()
-	return strings.TrimRight(string(out), "\n"), err
+	cmd := exec.Command("tmux", args...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := run(cmd)
+	return strings.TrimRight(out.String(), "\n"), err
+}
+
+func run(cmd *exec.Cmd) error {
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		command := strings.Join(cmd.Args[:min(2, len(cmd.Args))], " ")
+		detail := strings.TrimSpace(stderr.String())
+		if detail != "" {
+			return fmt.Errorf("%s: %w: %s", command, err, detail)
+		}
+		return fmt.Errorf("%s: %w", command, err)
+	}
+	return nil
 }
 
 // RunAttached executes a tmux command wired to the current terminal; used
