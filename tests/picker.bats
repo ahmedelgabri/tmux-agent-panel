@@ -14,6 +14,10 @@ setup() {
 }
 
 teardown() {
+	if [ -z "${BATS_TEST_COMPLETED:-}" ]; then
+		if [ -S "${FZF_SOCKET:-}" ]; then picker_status >&2 || true; fi
+		if [ -n "${PICKER:-}" ]; then tmx capture-pane -p -t "$PICKER" >&2 || true; fi
+	fi
 	stop_server
 }
 
@@ -40,13 +44,40 @@ focused_on() {
 	picker_status | jq -e --arg pane "$1" '.current.text | startswith($pane + "\t")' >/dev/null
 }
 
+# fzf drops cursor and execute actions while restoring tracked selection.
+# Retry only setup interactions; assertions after state changes stay passive
+# so a tracking regression cannot be hidden by reselecting the expected pane.
+select_second() {
+	picker_action 'pos(2)' && focused_on "$SECOND"
+}
+
+open_window_confirmation() {
+	if confirmation_visible; then return 0; fi
+	tmx send-keys -t "$PICKER" C-w
+	confirmation_visible
+}
+
 reordered() {
 	picker_status | jq -e --arg pane "$SECOND" '.matches[0].text | startswith($pane + "\t")' >/dev/null
 }
 
+blocked_reload_started() {
+	if [ -f "$TMUX_TEST_DIR/reload-started" ]; then return 0; fi
+	picker_action "reload(touch '$TMUX_TEST_DIR/reload-started'; while [ -f '$TMUX_TEST_DIR/reload-started' ] && [ ! -f '$TMUX_TEST_DIR/reload-release' ]; do sleep 0.01; done; '$TAP' __list)"
+	return 1
+}
+
+@test "picker setup handles cursor actions dropped during a reload" {
+	wait_for blocked_reload_started
+	run select_second
+	[ "$status" -ne 0 ]
+	focused_on "$TMUX_PANE"
+	touch "$TMUX_TEST_DIR/reload-release"
+	wait_for select_second
+}
+
 @test "picker tracks the selected pane when a state change reorders rows" {
-	picker_action 'pos(2)'
-	wait_for focused_on "$SECOND"
+	wait_for select_second
 	tmx set-option -p -t "$SECOND" @agent_state blocked
 	wait_for reordered
 	focused_on "$SECOND"
@@ -56,8 +87,7 @@ reordered() {
 }
 
 @test "picker preserves selection when the task changes" {
-	picker_action 'pos(2)'
-	wait_for focused_on "$SECOND"
+	wait_for select_second
 	tmx set-option -p -t "$SECOND" @agent_task 'updated task'
 	wait_for task_updated
 	focused_on "$SECOND"
@@ -68,10 +98,8 @@ task_updated() {
 }
 
 @test "window deletion waits for confirmation and can be cancelled" {
-	picker_action 'pos(2)'
-	wait_for focused_on "$SECOND"
-	tmx send-keys -t "$PICKER" C-w
-	wait_for confirmation_visible
+	wait_for select_second
+	wait_for open_window_confirmation
 	tmx display-message -p -t "$SECOND" '#{pane_id}'
 	tmx send-keys -t "$PICKER" n Enter
 	wait_for focused_on "$SECOND"
@@ -79,10 +107,8 @@ task_updated() {
 }
 
 @test "window confirmation keeps its original target across state changes" {
-	picker_action 'pos(2)'
-	wait_for focused_on "$SECOND"
-	tmx send-keys -t "$PICKER" C-w
-	wait_for confirmation_visible
+	wait_for select_second
+	wait_for open_window_confirmation
 	tmx set-option -p -t "$SECOND" @agent_state blocked
 	tmx send-keys -t "$PICKER" y Enter
 	wait_for second_gone
