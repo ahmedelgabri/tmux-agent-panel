@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,6 +143,16 @@ func TestPiExtensionFilters(t *testing.T) {
 		{[]string{"!**/*.ts", "+extensions/tap-agent-state.ts"}, true, true},
 		{[]string{"-extensions/tap-agent-state.ts", "+extensions/tap-agent-state.ts"}, true, false},
 		{[]string{"+extensions/tap-agent-state.ts"}, false, true},
+		{[]string{"extensions/*.ts"}, false, true},
+		{[]string{"!extensions/other.ts"}, false, false},
+		{[]string{"extensions/other.ts"}, true, false},
+		{[]string{"extensions/other.ts", "*.ts"}, true, true},
+		{[]string{"*.ts", "!extensions/*.ts"}, true, false},
+		{[]string{"+extensions/other.ts", "!*.ts"}, true, false},
+		{[]string{"+extensions/tap-agent-state.ts", "-extensions/tap-agent-state.ts"}, true, false},
+		{[]string{"-extensions/*.ts"}, true, true},
+		{[]string{"[invalid"}, true, false},
+		{[]string{""}, true, false},
 	} {
 		if got := piExtensionEnabled(tc.filters, tc.autoload); got != tc.want {
 			t.Errorf("filters %v, autoload %v: got %v, want %v", tc.filters, tc.autoload, got, tc.want)
@@ -149,7 +160,7 @@ func TestPiExtensionFilters(t *testing.T) {
 	}
 }
 
-func TestDoctorRecognizesNativeInstallation(t *testing.T) {
+func TestDoctorPiWiring(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(dir, "claude"))
 	t.Setenv("CODEX_HOME", filepath.Join(dir, "codex"))
@@ -163,14 +174,56 @@ func TestDoctorRecognizesNativeInstallation(t *testing.T) {
 		}
 	}
 	t.Setenv("PATH", bin)
-	put(t, filepath.Join(dir, "pi", "settings.json"), []byte(`{"packages":["npm:pi-tmux-agent-panel"]}`))
-	put(t, filepath.Join(dir, "pi", "npm", "node_modules", "pi-tmux-agent-panel", "extensions", "tap-agent-state.ts"), piExtension)
-	for _, check := range Doctor() {
-		if !check.OK {
-			t.Errorf("unexpected finding: %+v", check)
-		}
-		if check.Name == "pi" && (!strings.Contains(check.Detail, "native package installed") || strings.Contains(check.Detail, "not installed")) {
-			t.Errorf("native install misreported: %+v", check)
-		}
+	for _, tc := range []struct {
+		direct, native string
+		detected, ok   bool
+	}{
+		{"absent", "current", true, true},
+		{"current", "absent", true, true},
+		{"current", "current", true, true},
+		{"absent", "absent", true, false},
+		{"stale", "current", true, false},
+		{"current", "stale", true, false},
+		{"current", "missing", true, false},
+		{"absent", "absent", false, true},
+		{"stale", "stale", false, true},
+	} {
+		t.Run(fmt.Sprintf("%s/%s/detected=%v", tc.direct, tc.native, tc.detected), func(t *testing.T) {
+			piDir := t.TempDir()
+			t.Setenv("PI_CODING_AGENT_DIR", piDir)
+			if !tc.detected {
+				t.Setenv("PATH", t.TempDir())
+			}
+			for path, status := range map[string]string{
+				filepath.Join(piDir, "extensions", "tap-agent-state.ts"):                                               tc.direct,
+				filepath.Join(piDir, "npm", "node_modules", "pi-tmux-agent-panel", "extensions", "tap-agent-state.ts"): tc.native,
+			} {
+				switch status {
+				case "current":
+					put(t, path, piExtension)
+				case "stale":
+					put(t, path, []byte(piMarker))
+				}
+			}
+			if tc.native != "absent" {
+				put(t, filepath.Join(piDir, "settings.json"), []byte(`{"packages":["npm:pi-tmux-agent-panel"]}`))
+			}
+			for _, check := range Doctor() {
+				if check.Name != "pi" {
+					continue
+				}
+				if check.OK != tc.ok {
+					t.Errorf("unexpected status: %+v", check)
+				}
+				if tc.native == "current" && (!strings.Contains(check.Detail, "native package installed") || strings.Contains(check.Detail, "not installed")) {
+					t.Errorf("native install misreported: %+v", check)
+				}
+				if tc.direct == "current" && tc.native == "current" && !strings.Contains(check.Detail, "both install channels") {
+					t.Errorf("duplicate install not reported: %+v", check)
+				}
+				return
+			}
+			t.Fatal("pi check missing")
+		})
 	}
 }

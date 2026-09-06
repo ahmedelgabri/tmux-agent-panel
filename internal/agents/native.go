@@ -113,7 +113,11 @@ func codexNative() (string, error) {
 		}
 		a, aOK := parseVersion(version)
 		b, bOK := parseVersion(name)
-		if version == "" || (aOK && bOK && versionLess(a, b)) || ((!aOK || !bOK) && version < name) {
+		newer := version < name
+		if aOK && bOK {
+			newer = versionLess(a, b)
+		}
+		if newer {
 			version = name
 		}
 	}
@@ -206,33 +210,31 @@ func piExtensionEnabled(filters []string, autoload bool) bool {
 		return full || base
 	}
 	exact := func(pattern string) bool { return strings.TrimPrefix(pattern, "./") == extension }
-	enabled, hasIncludes := false, false
+	var included, excluded, forceIncluded, hasIncludes bool
 	for _, filter := range filters {
-		if strings.HasPrefix(filter, "!") || strings.HasPrefix(filter, "+") || strings.HasPrefix(filter, "-") {
-			continue
-		}
-		hasIncludes = true
-		enabled = enabled || matches(filter)
-	}
-	if !hasIncludes {
-		enabled = autoload
-	}
-	// pi applies exclusions, then exact force-includes, then exact
-	// force-excludes, independently of their order in settings.
-	for _, filter := range filters {
-		if strings.HasPrefix(filter, "!") && matches(filter[1:]) {
-			enabled = false
-		}
-	}
-	for _, filter := range filters {
-		if strings.HasPrefix(filter, "+") && exact(filter[1:]) {
-			enabled = true
+		switch {
+		case strings.HasPrefix(filter, "-"):
+			// Exact exclusions override every other filter.
+			if exact(filter[1:]) {
+				return false
+			}
+		case strings.HasPrefix(filter, "+"):
+			forceIncluded = forceIncluded || exact(filter[1:])
+		case strings.HasPrefix(filter, "!"):
+			excluded = excluded || matches(filter[1:])
+		default:
+			hasIncludes = true
+			included = included || matches(filter)
 		}
 	}
-	for _, filter := range filters {
-		if strings.HasPrefix(filter, "-") && exact(filter[1:]) {
-			enabled = false
-		}
+	if forceIncluded {
+		return true
 	}
-	return enabled
+	if excluded {
+		return false
+	}
+	if hasIncludes {
+		return included
+	}
+	return autoload
 }
