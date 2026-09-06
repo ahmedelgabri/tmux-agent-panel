@@ -85,6 +85,13 @@ teardown() {
 	[ "$status" -ne 0 ]
 }
 
+@test "tmux failures include the command and diagnostic" {
+	TMUX_PANE='%999999' run "$TAP" state running
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"tmux set-option"* ]]
+	[[ "$output" == *"%999999"* ]]
+}
+
 @test "outside tmux is a silent no-op" {
 	run env -u TMUX -u TMUX_PANE "$TAP" state running
 	[ "$status" -eq 0 ]
