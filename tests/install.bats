@@ -3,11 +3,16 @@
 load test_helper
 
 setup() {
+	start_server
 	export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
 	export CODEX_HOME="$BATS_TEST_TMPDIR/codex"
 	export PI_CODING_AGENT_DIR="$BATS_TEST_TMPDIR/pi"
 	mkdir -p "$CLAUDE_CONFIG_DIR"
 	printf '{\n\t"theme": "auto"\n}\n' >"$CLAUDE_CONFIG_DIR/settings.json"
+}
+
+teardown() {
+	stop_server
 }
 
 @test "install wires all forced agents" {
@@ -33,15 +38,18 @@ setup() {
 	"$TAP" install --claude --codex --pi
 	run "$TAP" uninstall --claude --codex --pi
 	[ "$status" -eq 0 ]
-	! grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	run grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	[ "$status" -eq 1 ]
 	grep -q '"theme": "auto"' "$CLAUDE_CONFIG_DIR/settings.json"
 	[ ! -f "$PI_CODING_AGENT_DIR/extensions/tap-agent-state.ts" ]
 }
 
-@test "install writes a backup before modifying" {
+@test "install and uninstall preserve the original backup" {
+	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/original.json"
 	"$TAP" install --claude
-	[ -f "$CLAUDE_CONFIG_DIR/settings.json.tap.bak" ]
-	grep -q '"theme": "auto"' "$CLAUDE_CONFIG_DIR/settings.json.tap.bak"
+	"$TAP" install --claude
+	"$TAP" uninstall --claude
+	cmp "$BATS_TEST_TMPDIR/original.json" "$CLAUDE_CONFIG_DIR/settings.json.tap.bak"
 }
 
 @test "install preserves user formatting byte-for-byte" {
@@ -71,15 +79,17 @@ setup() {
 	run env PATH="$BATS_TEST_TMPDIR/bin:$PATH" "$TAP" install --claude
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"2.1.78"* ]]
-	! grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	run grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	[ "$status" -eq 1 ]
 }
 
 @test "install migrates hooks out of events no longer in the set" {
 	"$TAP" install --claude
 	# Simulate hooks from a tap version that hooked a since-dropped event.
-	sed -i.orig 's/"PreToolUse"/"PostToolUse"/' "$CLAUDE_CONFIG_DIR/settings.json"
+	sed -i.orig 's/"PreToolUse"/"TapObsoleteEvent"/' "$CLAUDE_CONFIG_DIR/settings.json"
 	"$TAP" install --claude
-	! grep -q 'PostToolUse' "$CLAUDE_CONFIG_DIR/settings.json"
+	run grep -q 'TapObsoleteEvent' "$CLAUDE_CONFIG_DIR/settings.json"
+	[ "$status" -eq 1 ]
 	grep -q '"PreToolUse"' "$CLAUDE_CONFIG_DIR/settings.json"
 	run "$TAP" doctor
 	[[ "$output" != *"outdated"* ]]

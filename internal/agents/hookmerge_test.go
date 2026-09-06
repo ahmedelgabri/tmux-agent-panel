@@ -77,6 +77,76 @@ func TestInstallPreservesForeignHooks(t *testing.T) {
 	}
 }
 
+func TestOwnsCommand(t *testing.T) {
+	for command, want := range map[string]bool{
+		"tap state idle --agent claude":              true,
+		"/nix/store/hash-tap/bin/tap state clear":    true,
+		"'/home/a b/bin/tap' state running":          true,
+		`"/home/a b/bin/tap" state running`:          true,
+		"exec /usr/local/bin/tap state notification": true,
+		"tap\tstate\tidle":                           true,
+		`notify-send "tap state changed"`:            false,
+		"echo tap state idle":                        false,
+		"not-tap state idle":                         false,
+		"tap states idle":                            false,
+		"tap state":                                  false,
+		"tap state idle; echo user-work":             false,
+		"tap state idle && echo user-work":           false,
+		"tap state idle | logger":                    false,
+		"tap state idle\necho user-work":             false,
+		"tap state idle > /tmp/user-log":             false,
+		"'tap state idle":                            false,
+	} {
+		if got := ownsCommand(command); got != want {
+			t.Errorf("ownsCommand(%q) = %v, want %v", command, got, want)
+		}
+	}
+}
+
+func TestInstallPreservesOriginalBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []func() error{
+		func() error { return installHooks(path, testHooks) },
+		func() error { return installHooks(path, testHooks) },
+		func() error { return uninstallHooks(path) },
+	} {
+		if err := operation(); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path + ".tap.bak")
+		if err != nil || string(data) != existing {
+			t.Fatalf("original backup changed: %q, %v", data, err)
+		}
+	}
+}
+
+func TestInstallPreservesHookMentions(t *testing.T) {
+	const foreign = `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-send 'tap state changed'"},{"type":"command","command":"tap state idle; echo user-work"}]}]}}`
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(foreign), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if hooksInstalled(path) {
+		t.Fatal("mentions must not count as installed hooks")
+	}
+	if err := installHooks(path, testHooks); err != nil {
+		t.Fatal(err)
+	}
+	if !hooksCurrent(path, testHooks) {
+		t.Fatal("mentions must not affect freshness")
+	}
+	if err := uninstallHooks(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != foreign {
+		t.Fatalf("foreign hooks changed: %s, %v", data, err)
+	}
+}
+
 func TestInstallIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {

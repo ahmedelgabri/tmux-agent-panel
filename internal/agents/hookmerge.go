@@ -1,6 +1,6 @@
 // Hook merging for the JSON hook configs (Claude Code settings.json, Codex
-// hooks.json — same schema). Entries are keyed on the "tap state" marker in
-// their command string, which makes install idempotent (remove ours, then
+// hooks.json — same schema). Entries are identified by a direct `tap state`
+// invocation, which makes install idempotent (remove ours, then
 // re-add) and uninstall surgical (everything else is preserved).
 //
 // Edits are spliced into the original bytes with sjson/gjson so user
@@ -18,12 +18,31 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/junegunn/go-shellwords"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
-// Marker identifies hook entries owned by tap inside foreign config files.
+// Marker is the prefix of the canonical hook commands.
 const Marker = "tap state"
+
+// ownsCommand accepts direct invocations, including quoted absolute paths
+// from legacy installs. Mentions in another command and compound scripts
+// belong to the user; removing those could discard unrelated work.
+func ownsCommand(command string) bool {
+	if strings.ContainsAny(command, "\r\n") {
+		return false
+	}
+	p := &shellwords.Parser{}
+	args, err := p.Parse(command)
+	if err != nil || p.Position >= 0 {
+		return false
+	}
+	if len(args) > 0 && args[0] == "exec" {
+		args = args[1:]
+	}
+	return len(args) >= 3 && filepath.Base(args[0]) == "tap" && args[1] == "state"
+}
 
 // jsonHookFuncs wires the shared install flow for agents whose integration
 // is a JSON hooks file (Claude, Codex): resolve the config path, then
@@ -194,7 +213,11 @@ func stripAllMarked(doc string) string {
 // hooksInstalled reports whether the file contains any tap-owned entry.
 func hooksInstalled(path string) bool {
 	data, err := os.ReadFile(path)
-	return err == nil && strings.Contains(string(data), Marker)
+	if err != nil {
+		return false
+	}
+	var root pluginHooks
+	return json.Unmarshal(data, &root) == nil && len(markedCommands(root.Hooks)) > 0
 }
 
 // hooksCurrent reports whether the tap-owned entries in the file match the
@@ -213,7 +236,7 @@ func hooksCurrent(path string, hooksJSON []byte) bool {
 	}
 	var root pluginHooks
 	if err := json.Unmarshal(data, &root); err != nil {
-		return true
+		return false
 	}
 	return slices.Equal(markedCommands(plugin.Hooks), markedCommands(root.Hooks))
 }
@@ -234,7 +257,7 @@ func markedCommands(hooks map[string][]any) []string {
 				if !ok {
 					continue
 				}
-				if cmd, _ := entry["command"].(string); strings.Contains(cmd, Marker) {
+				if cmd, _ := entry["command"].(string); ownsCommand(cmd) {
 					out = append(out, event+"\t"+cmd)
 				}
 			}
@@ -254,7 +277,7 @@ func stripMarked(doc, eventPath string) string {
 		entries := groups[gi].Get("hooks").Array()
 		marked := 0
 		for _, e := range entries {
-			if strings.Contains(e.Get("command").String(), Marker) {
+			if ownsCommand(e.Get("command").String()) {
 				marked++
 			}
 		}
@@ -266,7 +289,7 @@ func stripMarked(doc, eventPath string) string {
 			continue
 		}
 		for ei := len(entries) - 1; ei >= 0; ei-- {
-			if strings.Contains(entries[ei].Get("command").String(), Marker) {
+			if ownsCommand(entries[ei].Get("command").String()) {
 				doc, _ = sjson.Delete(doc, fmt.Sprintf("%s.%d.hooks.%d", eventPath, gi, ei))
 			}
 		}
@@ -293,7 +316,24 @@ func checkWritable(path string) error {
 }
 
 func backup(path string, data []byte) error {
-	return os.WriteFile(path+".tap.bak", data, 0o600)
+	path += ".tap.bak"
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if os.IsExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(path)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(path)
+		return err
+	}
+	return nil
 }
 
 func writeJSON(path string, root map[string]any) error {

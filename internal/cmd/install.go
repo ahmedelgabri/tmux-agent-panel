@@ -15,10 +15,11 @@ var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Wire tap's state hooks into your coding agents",
 	Long: `Installs the hooks that make agents report their state to tmux: merges
-hook entries into Claude Code's settings.json and Codex's hooks.json (keyed
-on a "tap state" marker, so re-running is idempotent and 'tap uninstall'
-removes exactly what was added), and drops the pi extension into pi's
-extension directory. A backup is written next to each modified file.
+hook entries into Claude Code's settings.json and Codex's hooks.json
+(identified by direct 'tap state' invocations, so re-running is idempotent),
+and drops the pi extension into pi's extension directory. The original JSON
+config is backed up once to *.tap.bak. The pi extension is overwritten
+without a backup.
 
 By default only agents whose binary is on PATH are wired; pass --claude,
 --codex, or --pi to force a specific subset. Files managed by Nix/Home
