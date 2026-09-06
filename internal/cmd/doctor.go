@@ -14,7 +14,12 @@ import (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check tap's runtime dependencies and hook wiring",
-	Args:  cobra.NoArgs,
+	Long: `Checks runtime dependencies, user-scoped direct hooks and native
+plugin/package installs, and pane state on the current tmux server.
+Project-scoped installs, managed settings, and one-session agent CLI
+overrides are not checked. Native installs are inspected without running
+an agent or modifying its package cache.`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		checks := agents.Doctor()
 		// Orphaned agent state is runtime breakage the config checks can't

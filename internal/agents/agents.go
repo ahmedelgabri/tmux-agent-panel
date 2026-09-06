@@ -41,6 +41,10 @@ type Agent struct {
 	// false means a stale install whose commands predate a flag change
 	// (fix: `tap install`). Only meaningful when Installed.
 	Current func() bool
+	// Native inspects user-scoped plugin/package installs without running
+	// an agent. It returns a description for an active, current install,
+	// or an error when a configured installation needs repair.
+	Native func() (string, error)
 }
 
 // All returns the supported agents in display order.
@@ -56,6 +60,7 @@ func All() []Agent {
 			Uninstall:     uninstallClaude,
 			Installed:     claudeInstalled,
 			Current:       claudeCurrent,
+			Native:        claudeNative,
 		},
 		{
 			Name:       "codex",
@@ -66,6 +71,7 @@ func All() []Agent {
 			Uninstall:  uninstallCodex,
 			Installed:  codexInstalled,
 			Current:    codexCurrent,
+			Native:     codexNative,
 		},
 		{
 			Name:       "pi",
@@ -76,6 +82,7 @@ func All() []Agent {
 			Uninstall:  uninstallPi,
 			Installed:  piInstalled,
 			Current:    piCurrent,
+			Native:     piNative,
 		},
 	}
 }
