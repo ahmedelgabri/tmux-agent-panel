@@ -15,8 +15,8 @@ var pickCmd = &cobra.Command{
 on agent panes, sorted blocked → waiting → running → idle, and the list
 live-refreshes while open (with no agent panes it starts on all panes).
 Enter switches to the selected pane; ctrl-a toggles between the agents
-and all-panes views; ctrl-x/ctrl-w/ctrl-q kill the highlighted
-pane/window/session.`,
+and all-panes views; ctrl-x kills the highlighted pane immediately.
+ctrl-w/ctrl-q ask for confirmation before killing its window/session.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return picker.Run(inPopup)

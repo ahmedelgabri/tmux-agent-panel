@@ -54,11 +54,15 @@ func Run(inPopup bool) error {
 
 	if !inPopup {
 		return tmux.RunAttached("display-popup", "-E", "-w", "85%", "-h", "85%",
-			fmt.Sprintf("'%s' pick --in-popup", self))
+			shellQuote(self)+" pick --in-popup")
 	}
 
-	sock := filepath.Join(os.TempDir(), fmt.Sprintf("tap-%d.sock", os.Getpid()))
-	defer os.Remove(sock)
+	dir, err := os.MkdirTemp("", "tap-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	sock := filepath.Join(dir, "fzf.sock")
 
 	// The pane the picker was opened from cannot change while the popup is
 	// open; resolve it once and let every reload child inherit it.
@@ -146,6 +150,8 @@ func buildArgs(self, sock, prompt string) []string {
 		"--delimiter", "\t",
 		"--with-nth", "3..",
 		"--track",
+		"--id-nth", "1",
+		"--with-shell", "sh -c",
 		"--gutter", " ",
 		"--gutter-raw", " ",
 		"--listen", sock,
@@ -157,13 +163,13 @@ func buildArgs(self, sock, prompt string) []string {
 		// the blank header.
 		"--header", " ",
 		"--header-border", "line",
-		"--header-label", "ctrl-a all/agents · ? preview · kill: ctrl-x pane · ctrl-w window · ctrl-q session",
+		"--header-label", "ctrl-a all/agents · ? preview · kill: ctrl-x pane · confirm: ctrl-w window · ctrl-q session",
 		"--color", "bg+:-1,border:0,label:4,header-border:0,header-label:8",
 		"--bind", "?:toggle-preview",
-		"--bind", fmt.Sprintf("ctrl-a:transform:'%s' __toggle", self),
+		"--bind", "ctrl-a:transform:" + shellQuote(self) + " __toggle",
 		"--bind", "ctrl-x:execute-silent([ -n {1} ] && tmux kill-pane -t {1})+" + reload,
-		"--bind", "ctrl-w:execute-silent([ -n {1} ] && tmux kill-window -t {1})+" + reload,
-		"--bind", "ctrl-q:execute-silent([ -n {1} ] && tmux kill-session -t {1})+" + reload,
+		"--bind", "ctrl-w:execute(" + confirmKill("window") + ")+" + reload,
+		"--bind", "ctrl-q:execute(" + confirmKill("session") + ")+" + reload,
 		"--preview", "[ -n {1} ] && tmux capture-pane -ep -t {1} || true",
 		"--preview-window", "down,60%,border-top",
 		"--bind", `focus:transform-preview-label:printf " %s " {2}`,
@@ -174,7 +180,17 @@ func buildArgs(self, sock, prompt string) []string {
 // whichever view (all/agents) is active. Both the kill bindings and the
 // refresh loop use it.
 func reloadAction(self string) string {
-	return fmt.Sprintf("reload('%s' __list)", self)
+	return "reload(" + shellQuote(self) + " __list)"
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// fzf expands placeholders before suspending for execute, so confirmation
+// stays attached to the original pane even if live updates reorder the list.
+func confirmKill(kind string) string {
+	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && tmux kill-%s -t {1}`, kind, kind)
 }
 
 // refreshLoop drives live updates: every 200ms it POSTs a reload action to
@@ -212,7 +228,7 @@ func refreshLoop(sock, self string, stop <-chan struct{}) {
 // relying on the prompt, which changes in the same action chain.
 func TransformToggle(self string) string {
 	if os.Getenv("FZF_PROMPT") == PromptAll {
-		return fmt.Sprintf("change-prompt(%s)+reload('%s' __list --agents)", PromptAgents, self)
+		return fmt.Sprintf("change-prompt(%s)+reload(%s __list --agents)", PromptAgents, shellQuote(self))
 	}
-	return fmt.Sprintf("change-prompt(%s)+reload('%s' __list)", PromptAll, self)
+	return fmt.Sprintf("change-prompt(%s)+reload(%s __list)", PromptAll, shellQuote(self))
 }
