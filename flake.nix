@@ -77,6 +77,7 @@
             git
             nixd
             bats
+            curl
             tmux
             jq
             go
