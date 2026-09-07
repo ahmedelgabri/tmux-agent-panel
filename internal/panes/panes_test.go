@@ -1,9 +1,13 @@
 package panes
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/rivo/uniseg"
 )
@@ -18,6 +22,44 @@ var fixture = []string{
 	line("%3", "work:2.1", "shell", "zsh", "/Users/x", "", "", "zsh", ""),
 	line("%4", "popup_dotfil_a3f2:1.1", "popup", "codex", "/Users/x/.dotfiles", "blocked", "review", "codex", ""),
 	line("%5", "main:3.1", "pi", "pi", "/Users/x", "idle", "", "pi", ""),
+}
+
+func TestCachedList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rows.json")
+	t.Setenv(SnapshotEnv, path)
+	t.Setenv("PATH", t.TempDir())
+	for _, snapshot := range []Snapshot{
+		{All: "all\t'{}$(command)\n", Agents: "\x1b[32magent\x1b[0m\n", HasAgents: true},
+		{All: "updated all", Agents: "updated agents", HasAgents: true},
+	} {
+		if err := snapshot.Write(path); err != nil {
+			t.Fatal(err)
+		}
+		for agentsOnly, want := range map[bool]string{false: snapshot.All, true: snapshot.Agents} {
+			got, err := List(agentsOnly, "")
+			if err != nil || got != want {
+				t.Fatalf("cached agents=%v: %q, %v", agentsOnly, got, err)
+			}
+		}
+	}
+	if err := os.WriteFile(path, []byte("invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := List(false, ""); err == nil {
+		t.Fatal("invalid cache must not silently fall back to live tmux")
+	}
+}
+
+func TestRowsDoNotChangeWithClock(t *testing.T) {
+	t.Setenv(CurrentPaneEnv, "%2")
+	synctest.Test(t, func(t *testing.T) {
+		before := Render(BuildRows(fixture, listOptions(false, "/Users/x")))
+		time.Sleep(time.Second)
+		after := Render(BuildRows(fixture, listOptions(false, "/Users/x")))
+		if after != before {
+			t.Fatal("clock-only changes must not trigger list reloads")
+		}
+	})
 }
 
 func TestOrphaned(t *testing.T) {

@@ -89,6 +89,51 @@ blocked_reload_started() {
 	wait_for focused_on "$SECOND"
 }
 
+@test "cached views include live changes to plain panes" {
+	wait_for show_all_panes
+	local plain
+	plain="$(tmx new-window -d -t main -n plain-before -P -F '#{pane_id}' 'sleep 300')"
+	wait_for row_contains "$plain" plain-before
+	tmx rename-window -t "$plain" plain-updated
+	wait_for row_contains "$plain" plain-updated
+	wait_for show_agent_panes
+	picker_status | jq -e '.matchCount == 2' >/dev/null
+}
+
+show_all_panes() {
+	if row_contains "$PICKER" picker; then return 0; fi
+	tmx send-keys -t "$PICKER" C-a
+	row_contains "$PICKER" picker
+}
+
+show_agent_panes() {
+	if picker_status | jq -e '.matchCount == 2' >/dev/null; then return 0; fi
+	tmx send-keys -t "$PICKER" C-a
+	picker_status | jq -e '.matchCount == 2' >/dev/null
+}
+
+row_contains() {
+	picker_status | jq -e --arg pane "$1" --arg text "$2" '.matches[] | select(.text | startswith($pane + "\t")) | .text | contains($text)' >/dev/null
+}
+
+@test "typing stays intact while agent state changes" {
+	local query='second second second second' i
+	for ((i = 0; i < ${#query}; i++)); do
+		# Send each key once: retrying would hide dropped input.
+		tmx send-keys -t "$PICKER" -l "${query:i:1}"
+		if [ "$i" -eq 6 ]; then
+			tmx set-option -p -t "$SECOND" @agent_state blocked
+		fi
+		sleep 0.05
+	done
+	picker_status | jq -e --arg query "$query" '.query == $query' >/dev/null
+	wait_for blocked_row_visible
+}
+
+blocked_row_visible() {
+	picker_status | jq -e --arg pane "$SECOND" '.matches[] | select(.text | startswith($pane + "\t")) | .text | contains("▲")' >/dev/null
+}
+
 @test "picker preserves selection when the task changes" {
 	wait_for select_second
 	tmx set-option -p -t "$SECOND" @agent_task 'updated task'

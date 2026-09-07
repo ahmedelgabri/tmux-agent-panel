@@ -39,7 +39,7 @@ Open the picker from any shell inside tmux:
 tap pick
 ```
 
-The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. The list refreshes five times per second while open; selection follows the pane ID when state changes reorder the rows.
+The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. Pane state is polled every 200 ms, but the list reloads only when rows change and after a pause in typing. Preview output refreshes independently without rebuilding the list. Selection follows the pane ID when state changes reorder the rows.
 
 Bind it wherever you like, e.g. a zsh widget on `C-Space`:
 
@@ -60,7 +60,7 @@ bind-key Space run-shell 'tap pick'
 ### Reading the list
 
 - Rows lead with an icon instead of a `session:window.pane` column: agent panes show their agent — yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi — and plain panes show the pane type, `❐` session or `⧉` persistent popup (`popup_*` sessions). The full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
-- State glyphs: green animated spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle.
+- State glyphs: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. The running glyph is static so animation never interrupts input with a list reload.
 - The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
 
 ## Installing through each agent's own package manager
@@ -141,7 +141,7 @@ GitHub retains at most 100 pending runs in this group and cancels additional run
 
 ### Refresh benchmark
 
-Run `just bench-refresh --benchtime=2s --count=3` to compare the current shell/tap/tmux reload command with in-process pane listing. The benchmark builds a temporary binary and uses a private tmux server; it never targets your running server.
+Run `just bench-refresh --benchtime=2s --count=3` to compare cached picker reloads, in-process polling, and standalone shell/tap/tmux listing. The benchmark builds a temporary binary and uses a private tmux server; it never targets your running server.
 
 The benchmark reports wall-clock timings, not CPU usage, and excludes fzf rendering and HTTP delivery. Run it with representative pane counts on your own machine before changing the 200 ms polling interval or reload transport.
 

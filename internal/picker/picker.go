@@ -7,16 +7,14 @@
 // --in-popup` via `tmux display-popup -E` and the inner invocation runs fzf
 // plain, owning the whole popup.
 //
-// fzf listens on a Unix socket and an in-process goroutine POSTs a reload
-// action every 200ms, animating the running-state spinner and keeping
-// agent states live while the picker is open. fzf exports FZF_PROMPT to
-// reload children, so `tap __list` derives the active view (all vs
-// agents-only) itself — no transform indirection needed. --track pins the
-// cursor across reloads.
+// An in-process poller reloads fzf only when pane rows change, after a
+// pause in typing. fzf exports FZF_PROMPT to reload children, so `tap __list`
+// preserves the active view. --track pins the cursor across reloads.
 package picker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -72,13 +70,21 @@ func Run(inPopup bool) error {
 	// The picker opens focused on agents; ctrl-a widens to all panes. With
 	// no agent panes the focused view would be empty, so start on all.
 	home, _ := os.UserHomeDir()
-	initial, agentsView, err := panes.ListInitial(home)
+	snapshot, err := panes.ListViews(home)
 	if err != nil {
 		return err
 	}
-	prompt := PromptAll
-	if agentsView {
-		prompt = PromptAgents
+	cache := filepath.Join(dir, "rows.json")
+	if err := snapshot.Write(cache); err != nil {
+		return err
+	}
+	if err := os.Setenv(panes.SnapshotEnv, cache); err != nil {
+		return err
+	}
+	defer os.Unsetenv(panes.SnapshotEnv)
+	initial, prompt := snapshot.All, PromptAll
+	if snapshot.HasAgents {
+		initial, prompt = snapshot.Agents, PromptAgents
 	}
 
 	opts, err := fzf.ParseOptions(false, buildArgs(self, sock, prompt))
@@ -98,7 +104,7 @@ func Run(inPopup bool) error {
 	opts.Printer = func(s string) { selected = append(selected, s) }
 
 	stop := make(chan struct{})
-	go refreshLoop(sock, self, stop)
+	go refreshLoop(sock, self, cache, snapshot, func() (panes.Snapshot, error) { return panes.ListViews(home) }, stop)
 
 	code, err := fzf.Run(opts)
 
@@ -177,10 +183,10 @@ func confirmKill(kind string) string {
 	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && tmux kill-%s -t {1}`, kind, kind)
 }
 
-// refreshLoop drives live updates: every 200ms it POSTs a reload action to
-// fzf's listen socket. Dial errors are expected both before fzf binds the
-// socket and after it exits, so they are ignored.
-func refreshLoop(sock, self string, stop <-chan struct{}) {
+// Tracked reloads block fzf input. Compare stable rows before reloading and
+// wait for a pause in query edits; preview refreshes do not block input.
+// Poll all panes so changes are noticed regardless of the active view.
+func refreshLoop(sock, self, cache string, lastRows panes.Snapshot, list func() (panes.Snapshot, error), stop <-chan struct{}) {
 	client := &http.Client{
 		Timeout: time.Second,
 		Transport: &http.Transport{
@@ -190,7 +196,9 @@ func refreshLoop(sock, self string, stop <-chan struct{}) {
 			},
 		},
 	}
-	action := reloadAction(self)
+	defer client.CloseIdleConnections()
+	var lastQuery string
+	var quietAfter time.Time
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -198,9 +206,44 @@ func refreshLoop(sock, self string, stop <-chan struct{}) {
 		case <-stop:
 			return
 		case <-ticker.C:
-			resp, err := client.Post("http://localhost/", "text/plain", strings.NewReader(action))
+			resp, err := client.Get("http://localhost/?limit=0")
+			if err != nil {
+				continue
+			}
+			var status struct {
+				Query   string `json:"query"`
+				Reading bool   `json:"reading"`
+			}
+			err = json.NewDecoder(resp.Body).Decode(&status)
+			resp.Body.Close()
+			if err != nil || resp.StatusCode != http.StatusOK {
+				continue
+			}
+			now := time.Now()
+			if status.Query != lastQuery {
+				lastQuery = status.Query
+				quietAfter = now.Add(400 * time.Millisecond)
+			}
+			if status.Reading || now.Before(quietAfter) {
+				continue
+			}
+			rows, err := list()
+			if err != nil {
+				continue
+			}
+			action := "refresh-preview"
+			if rows != lastRows {
+				if err := rows.Write(cache); err != nil {
+					continue
+				}
+				action = reloadAction(self)
+			}
+			resp, err = client.Post("http://localhost/", "text/plain", strings.NewReader(action))
 			if err == nil {
 				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					lastRows = rows
+				}
 			}
 		}
 	}

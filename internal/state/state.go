@@ -36,8 +36,8 @@ const (
 // single-line change.
 type Desc struct {
 	Name  string
-	Rank  int    // picker sort order within the agents section
-	Glyph string // running has none: the picker animates a spinner instead
+	Rank  int // picker sort order within the agents section
+	Glyph string
 	Color string
 }
 
@@ -46,7 +46,7 @@ type Desc struct {
 var States = []Desc{
 	{Name: "blocked", Rank: 0, Glyph: "▲", Color: ansi.Red},
 	{Name: "waiting", Rank: 1, Glyph: "?", Color: ansi.Yellow},
-	{Name: "running", Rank: 2, Glyph: "", Color: ansi.Green},
+	{Name: "running", Rank: 2, Glyph: "⠋", Color: ansi.Green},
 	{Name: "idle", Rank: 3, Glyph: "◌", Color: ansi.Gray},
 }
 

@@ -15,11 +15,11 @@
 package panes
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rivo/uniseg"
 
@@ -28,8 +28,6 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
-
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠇"}
 
 // CurrentPaneEnv carries the pane the picker was opened from. The picker
 // resolves it once before starting fzf — it cannot change while the popup
@@ -66,7 +64,6 @@ type Row struct {
 // Options carries the ambient inputs so BuildRows stays pure and testable.
 type Options struct {
 	AgentsOnly  bool
-	Frame       int    // spinner frame index
 	CurrentPane string // pane the picker was opened from
 	Home        string // for ~ shortening
 }
@@ -166,7 +163,6 @@ func BuildRows(lines []string, o Options) []Row {
 		entries = append(entries, e)
 	}
 
-	spinner := spinnerFrames[o.Frame%len(spinnerFrames)]
 	// Plain rows leave the agent rows' status slot — glyph, its trailing
 	// space, and the padded task — blank so the path column stays aligned.
 	plainGap := "  "
@@ -202,7 +198,7 @@ func BuildRows(lines []string, o Options) []Row {
 
 		if e.isAgent {
 			display := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  " +
-				stateGlyph(e.state, spinner) + " " + pad(e.task, taskWidth) + "  " +
+				stateGlyph(e.state) + " " + pad(e.task, taskWidth) + "  " +
 				ansi.Gray + p.Path + ansi.Reset
 			agentRows = append(agentRows, agentRow{
 				row:  Row{PaneID: p.ID, Addr: p.Addr, Display: display},
@@ -270,8 +266,7 @@ func Fetch() ([]Pane, error) {
 	return ps, nil
 }
 
-// listOptions resolves the ambient inputs. The spinner frame comes from a
-// 200ms clock so consecutive reloads animate it.
+// Keep rows independent of the clock so unchanged panes do not need reloads.
 func listOptions(agentsOnly bool, home string) Options {
 	current := os.Getenv(CurrentPaneEnv)
 	if current == "" {
@@ -279,14 +274,50 @@ func listOptions(agentsOnly bool, home string) Options {
 	}
 	return Options{
 		AgentsOnly:  agentsOnly,
-		Frame:       int(time.Now().UnixMicro() / 200000),
 		CurrentPane: current,
 		Home:        home,
 	}
 }
 
-// List shells out to tmux and renders the current rows.
+// SnapshotEnv lets reload children consume the exact rows the poller compared,
+// rather than a second tmux sample that could change between reads.
+const SnapshotEnv = "TAP_PICKER_SNAPSHOT"
+
+type Snapshot struct {
+	All, Agents string
+	HasAgents   bool
+}
+
+// Write publishes both views together so toggling cannot read a partial update.
+func (s Snapshot) Write(path string) error {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	defer os.Remove(tmp)
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// List uses the popup's snapshot when available; standalone callers query tmux.
 func List(agentsOnly bool, home string) (string, error) {
+	if path := os.Getenv(SnapshotEnv); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		var snapshot Snapshot
+		if err := json.Unmarshal(data, &snapshot); err != nil {
+			return "", err
+		}
+		if agentsOnly {
+			return snapshot.Agents, nil
+		}
+		return snapshot.All, nil
+	}
 	out, err := listOutput()
 	if err != nil {
 		return "", err
@@ -294,22 +325,21 @@ func List(agentsOnly bool, home string) (string, error) {
 	return Render(BuildRows(strings.Split(out, "\n"), listOptions(agentsOnly, home))), nil
 }
 
-// ListInitial renders the picker's startup view from a single tmux round
-// trip: agents-only when any agent pane exists, all panes otherwise — a
-// focused view with nothing to select would open empty. The boolean
-// reports which view was chosen.
-func ListInitial(home string) (string, bool, error) {
+// ListViews renders both views from one tmux sample, ignoring any cached snapshot.
+func ListViews(home string) (Snapshot, error) {
 	out, err := listOutput()
 	if err != nil {
-		return "", false, err
+		return Snapshot{}, err
 	}
 	lines := strings.Split(out, "\n")
 	o := listOptions(true, home)
-	if rows := BuildRows(lines, o); selectable(rows) {
-		return Render(rows), true, nil
-	}
+	agents := BuildRows(lines, o)
 	o.AgentsOnly = false
-	return Render(BuildRows(lines, o)), false, nil
+	return Snapshot{
+		All:       Render(BuildRows(lines, o)),
+		Agents:    Render(agents),
+		HasAgents: selectable(agents),
+	}, nil
 }
 
 // selectable reports whether any row targets a real pane — non-selectable
@@ -333,15 +363,9 @@ func pad(s string, width int) string {
 	return s
 }
 
-func stateGlyph(st, spinner string) string {
+func stateGlyph(st string) string {
 	d := state.ByName(st)
-	glyph := d.Glyph
-	// running is the one animated state; its glyph is the current
-	// spinner frame rather than a fixed rune.
-	if glyph == "" {
-		glyph = spinner
-	}
-	return d.Color + glyph + ansi.Reset
+	return d.Color + d.Glyph + ansi.Reset
 }
 
 // TaskFromTitle agents prefix their pane title with a spinner glyph while
