@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -154,20 +153,21 @@ func piNative() (string, error) {
 	}
 	for _, raw := range config.Packages {
 		var source string
+		var filtered struct {
+			Source     string   `json:"source"`
+			Extensions []string `json:"extensions"`
+			Autoload   *bool    `json:"autoload"`
+		}
 		if json.Unmarshal(raw, &source) != nil {
-			var filtered struct {
-				Source     string   `json:"source"`
-				Extensions []string `json:"extensions"`
-				Autoload   *bool    `json:"autoload"`
-			}
 			if err := json.Unmarshal(raw, &filtered); err != nil {
 				return "", fmt.Errorf("pi package settings: %w", err)
 			}
-			autoload := filtered.Autoload == nil || *filtered.Autoload
-			if !piExtensionEnabled(filtered.Extensions, autoload) {
-				continue
-			}
 			source = filtered.Source
+		}
+		autoload := filtered.Autoload == nil || *filtered.Autoload
+		// Empty filters need no path resolution or package-manager lookup.
+		if len(filtered.Extensions) == 0 && (filtered.Extensions != nil || !autoload) {
+			continue
 		}
 		var root string
 		switch {
@@ -192,7 +192,14 @@ func piNative() (string, error) {
 				continue
 			}
 		}
-		path := filepath.Join(root, "extensions", "tap-agent-state.ts")
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return "", err
+		}
+		if !piExtensionEnabled(root, filtered.Extensions, autoload) {
+			continue
+		}
+		path := filepath.Join(root, piPackageExtension)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return "", fmt.Errorf("native pi package unavailable (%s); run `pi install %s`: %w", path, source, err)
@@ -203,48 +210,4 @@ func piNative() (string, error) {
 		return "native package installed (" + root + ")", nil
 	}
 	return "", nil
-}
-
-func piExtensionEnabled(filters []string, autoload bool) bool {
-	if filters == nil {
-		return autoload
-	}
-	if len(filters) == 0 {
-		return false
-	}
-	const extension = "extensions/tap-agent-state.ts"
-	matches := func(pattern string) bool {
-		pattern = strings.TrimPrefix(strings.TrimPrefix(pattern, "./"), "**/")
-		full, _ := path.Match(pattern, extension)
-		base, _ := path.Match(pattern, path.Base(extension))
-		return full || base
-	}
-	exact := func(pattern string) bool { return strings.TrimPrefix(pattern, "./") == extension }
-	var included, excluded, forceIncluded, hasIncludes bool
-	for _, filter := range filters {
-		switch {
-		case strings.HasPrefix(filter, "-"):
-			// Exact exclusions override every other filter.
-			if exact(filter[1:]) {
-				return false
-			}
-		case strings.HasPrefix(filter, "+"):
-			forceIncluded = forceIncluded || exact(filter[1:])
-		case strings.HasPrefix(filter, "!"):
-			excluded = excluded || matches(filter[1:])
-		default:
-			hasIncludes = true
-			included = included || matches(filter)
-		}
-	}
-	if forceIncluded {
-		return true
-	}
-	if excluded {
-		return false
-	}
-	if hasIncludes {
-		return included
-	}
-	return autoload
 }

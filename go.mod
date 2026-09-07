@@ -3,6 +3,7 @@ module github.com/ahmedelgabri/tmux-agent-panel
 go 1.26.4
 
 require (
+	github.com/benjaminnkem/minimatch-go v0.1.0
 	github.com/junegunn/fzf v0.74.2
 	github.com/junegunn/go-shellwords v0.0.0-20250127100254-2aa3b3277741
 	github.com/pelletier/go-toml/v2 v2.4.3
@@ -14,6 +15,7 @@ require (
 
 require (
 	github.com/charlievieth/fastwalk v1.0.14 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/gdamore/tcell/v2 v2.9.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
