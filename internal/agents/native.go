@@ -92,12 +92,14 @@ func codexNative() (string, error) {
 		return "", err
 	}
 	var config struct {
-		Plugins map[string]struct{ Enabled bool }
+		Plugins map[string]struct{ Enabled *bool }
 	}
 	if err := toml.Unmarshal(data, &config); err != nil {
 		return "", fmt.Errorf("%s: %w", configPath, err)
 	}
-	if !config.Plugins["tap-codex@tmux-agent-panel"].Enabled {
+	plugin, configured := config.Plugins["tap-codex@tmux-agent-panel"]
+	// Codex defaults a configured plugin to enabled when the field is omitted.
+	if !configured || (plugin.Enabled != nil && !*plugin.Enabled) {
 		return "", nil
 	}
 	base := filepath.Join(filepath.Dir(hooks), "plugins", "cache", "tmux-agent-panel", "tap-codex")

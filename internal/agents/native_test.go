@@ -71,6 +71,38 @@ func TestCodexNative(t *testing.T) {
 	}
 }
 
+func TestCodexNativeEnablement(t *testing.T) {
+	const table = "[plugins.\"tap-codex@tmux-agent-panel\"]\n"
+	for _, tc := range []struct {
+		name, config string
+		enabled      bool
+	}{
+		{"absent table", "", false},
+		{"unrelated table", "[plugins.\"other@marketplace\"]\n", false},
+		{"empty table", table, true},
+		{"explicit true", table + "enabled = true\n", true},
+		{"explicit false", table + "enabled = false\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("CODEX_HOME", dir)
+			put(t, filepath.Join(dir, "config.toml"), []byte(tc.config))
+			base := filepath.Join(dir, "plugins", "cache", "tmux-agent-panel", "tap-codex")
+			root := filepath.Join(base, "local")
+			put(t, filepath.Join(root, "hooks", "hooks.json"), plugins.CodexHooks)
+			if detail, err := codexNative(); err != nil || (detail != "") != tc.enabled {
+				t.Fatalf("cached plugin: %q, %v; enabled=%v", detail, err, tc.enabled)
+			}
+			if err := os.RemoveAll(base); err != nil {
+				t.Fatal(err)
+			}
+			if detail, err := codexNative(); (err != nil) != tc.enabled || detail != "" {
+				t.Fatalf("missing plugin: %q, %v; enabled=%v", detail, err, tc.enabled)
+			}
+		})
+	}
+}
+
 func TestPiNative(t *testing.T) {
 	for _, source := range []string{
 		"https://github.com/ahmedelgabri/tmux-agent-panel",
