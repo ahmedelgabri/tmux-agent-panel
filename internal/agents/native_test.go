@@ -142,6 +142,7 @@ func TestPiNative(t *testing.T) {
 func TestPiNativeDisabledAndUnrelated(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PI_CODING_AGENT_DIR", dir)
+	t.Setenv("PATH", t.TempDir())
 	for _, settings := range []string{
 		`{"packages":[{"source":"https://github.com/ahmedelgabri/tmux-agent-panel","extensions":[]}]}`,
 		`{"packages":[{"source":"https://github.com/ahmedelgabri/tmux-agent-panel","autoload":false}]}`,

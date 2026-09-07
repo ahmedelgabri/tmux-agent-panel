@@ -146,7 +146,8 @@ func piNative() (string, error) {
 	}
 	dir := filepath.Dir(filepath.Dir(extension))
 	var config struct {
-		Packages []json.RawMessage `json:"packages"`
+		Packages   []json.RawMessage `json:"packages"`
+		NpmCommand []string          `json:"npmCommand"`
 	}
 	if err := readConfig(filepath.Join(dir, "settings.json"), &config); err != nil {
 		return "", err
@@ -170,27 +171,26 @@ func piNative() (string, error) {
 		}
 		var root string
 		switch {
-		case piGitSource.MatchString(source):
+		case piGitSource.MatchString(source) && (strings.HasPrefix(source, "git:") || strings.Contains(source, "://")):
 			root = filepath.Join(dir, "git", "github.com", "ahmedelgabri", "tmux-agent-panel")
-		case source == "npm:pi-tmux-agent-panel" || strings.HasPrefix(source, "npm:pi-tmux-agent-panel@"):
-			root = filepath.Join(dir, "npm", "node_modules", "pi-tmux-agent-panel")
-		case filepath.IsAbs(source) || strings.HasPrefix(source, ".") || strings.HasPrefix(source, "~/"):
-			root = source
-			if strings.HasPrefix(root, "~/") {
-				home, err := os.UserHomeDir()
-				if err != nil {
-					return "", err
-				}
-				root = filepath.Join(home, root[2:])
-			} else if !filepath.IsAbs(root) {
-				root = filepath.Join(dir, root)
+		case strings.HasPrefix(source, "npm:"):
+			spec := strings.TrimSpace(strings.TrimPrefix(source, "npm:"))
+			if spec != "pi-tmux-agent-panel" && !strings.HasPrefix(spec, "pi-tmux-agent-panel@") {
+				continue
+			}
+			root = piNpmRoot(dir, config.NpmCommand)
+		default:
+			root, err = piLocalPath(dir, source)
+			if err != nil {
+				return "", fmt.Errorf("pi package %q: %w", source, err)
+			}
+			if root == "" {
+				continue
 			}
 			var manifest struct{ Name string }
 			if readConfig(filepath.Join(root, "package.json"), &manifest) != nil || manifest.Name != "pi-tmux-agent-panel" {
 				continue
 			}
-		default:
-			continue
 		}
 		path := filepath.Join(root, "extensions", "tap-agent-state.ts")
 		data, err := os.ReadFile(path)
