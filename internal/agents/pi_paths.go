@@ -16,12 +16,10 @@ import (
 // Local path normalization follows Pi's user-settings base directory:
 // https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/utils/paths.ts
 func piLocalPath(dir, source string) (string, error) {
-	root := strings.TrimSpace(source)
-	for _, prefix := range []string{"npm:", "git:", "github:", "http:", "https:", "ssh:"} {
-		if strings.HasPrefix(root, prefix) {
-			return "", nil
-		}
+	if !piLocalSource(source) {
+		return "", nil
 	}
+	root := trimPiSpace(source)
 	switch {
 	case root == "~" || strings.HasPrefix(root, "~/"):
 		home, err := os.UserHomeDir()
@@ -47,6 +45,16 @@ func piLocalPath(dir, source string) (string, error) {
 		root = filepath.Join(dir, root)
 	}
 	return filepath.Abs(root)
+}
+
+func piLocalSource(source string) bool {
+	source = trimPiSpace(source)
+	for _, prefix := range []string{"npm:", "git:", "github:", "http:", "https:", "ssh:"} {
+		if strings.HasPrefix(source, prefix) {
+			return false
+		}
+	}
+	return true
 }
 
 // Match getNpmInstallPath/getLegacyGlobalNpmInstallPath, including wrappers:

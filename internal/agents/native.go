@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -138,8 +137,6 @@ func codexNative() (string, error) {
 	return nativeHooks(filepath.Join(base, version), plugins.CodexHooks)
 }
 
-var piGitSource = regexp.MustCompile(`^(git:)?(https?://github\.com/|ssh://git@github\.com/|git@github\.com:|github\.com/)ahmedelgabri/tmux-agent-panel(\.git)?(@[^\s]+)?$`)
-
 // User-scope package paths and filters follow:
 // https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/package-manager.ts
 func piNative() (string, error) {
@@ -167,12 +164,16 @@ func piNative() (string, error) {
 			source = pkg.Source
 		}
 		var identity, root string
+		gitHost, gitRepo := parsePiGitSource(source)
 		switch {
-		case piGitSource.MatchString(source) && (strings.HasPrefix(source, "git:") || strings.Contains(source, "://")):
-			identity = "git:github.com/ahmedelgabri/tmux-agent-panel"
-			root = filepath.Join(dir, "git", "github.com", "ahmedelgabri", "tmux-agent-panel")
+		case gitHost != "":
+			if !strings.EqualFold(gitHost, "github.com") || !strings.EqualFold(filepath.ToSlash(filepath.Clean(gitRepo)), "ahmedelgabri/tmux-agent-panel") {
+				continue
+			}
+			identity = "git:" + gitHost + "/" + gitRepo
+			root = filepath.Join(dir, "git", gitHost, gitRepo)
 		case strings.HasPrefix(source, "npm:"):
-			spec := strings.TrimSpace(strings.TrimPrefix(source, "npm:"))
+			spec := trimPiSpace(strings.TrimPrefix(source, "npm:"))
 			name, version, versioned := strings.Cut(spec, "@")
 			if name != "pi-tmux-agent-panel" || (versioned && version == "") {
 				continue
