@@ -140,6 +140,8 @@ task_updated() {
 }
 
 @test "picker exit check distinguishes pty closure from process completion" {
+	# Guard the pane_dead/exit-status race from Linux CI run 34058266359.
+	# These simulated replies fail the regression with a pane_dead-only helper.
 	(
 		# Keep the simulated replies local so teardown still uses the real tmux.
 		tmx() {

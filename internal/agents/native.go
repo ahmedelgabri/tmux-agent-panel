@@ -40,6 +40,9 @@ func nativeHooks(root string, hooks []byte) (string, error) {
 	return "native plugin installed (" + root + ")", nil
 }
 
+// Enablement/scopes: https://code.claude.com/docs/en/plugins-reference.
+// The installed_plugins.json v2 registry layout was observed on a real install;
+// it is not a documented API contract.
 func claudeNative() (string, error) {
 	settings, err := claudeSettingsPath()
 	if err != nil {
@@ -72,6 +75,9 @@ func claudeNative() (string, error) {
 	return "", fmt.Errorf("native plugin %s enabled but not installed; run `claude plugin install %s`", key, key)
 }
 
+// Cache paths and active-version precedence follow plugin_base_root,
+// active_plugin_version, and compare_plugin_versions in:
+// https://github.com/openai/codex/blob/2230d644/codex-rs/core-plugins/src/store.rs
 func codexNative() (string, error) {
 	hooks, err := codexHooksPath()
 	if err != nil {
@@ -129,6 +135,8 @@ func codexNative() (string, error) {
 
 var piGitSource = regexp.MustCompile(`^(git:)?(https?://github\.com/|ssh://git@github\.com/|git@github\.com:|github\.com/)ahmedelgabri/tmux-agent-panel(\.git)?(@[^\s]+)?$`)
 
+// User-scope package paths and filters follow:
+// https://github.com/earendil-works/pi/blob/v0.85.1/packages/coding-agent/src/core/package-manager.ts
 func piNative() (string, error) {
 	extension, err := piExtensionPath()
 	if err != nil {
