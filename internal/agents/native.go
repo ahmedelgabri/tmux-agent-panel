@@ -155,34 +155,29 @@ func piNative() (string, error) {
 	if err := readConfig(filepath.Join(dir, "settings.json"), &config); err != nil {
 		return "", err
 	}
+	seen := make(map[string]bool)
 	for _, raw := range config.Packages {
 		var source string
-		var filtered struct {
-			Source     string   `json:"source"`
-			Extensions []string `json:"extensions"`
-			Autoload   *bool    `json:"autoload"`
-		}
-		if json.Unmarshal(raw, &source) != nil {
-			if err := json.Unmarshal(raw, &filtered); err != nil {
+		objectForm := json.Unmarshal(raw, &source) != nil
+		if objectForm {
+			var pkg struct{ Source string }
+			if err := json.Unmarshal(raw, &pkg); err != nil {
 				return "", fmt.Errorf("pi package settings: %w", err)
 			}
-			source = filtered.Source
+			source = pkg.Source
 		}
-		autoload := filtered.Autoload == nil || *filtered.Autoload
-		// Empty filters need no path resolution or package-manager lookup.
-		if len(filtered.Extensions) == 0 && (filtered.Extensions != nil || !autoload) {
-			continue
-		}
-		var root string
+		var identity, root string
 		switch {
 		case piGitSource.MatchString(source) && (strings.HasPrefix(source, "git:") || strings.Contains(source, "://")):
+			identity = "git:github.com/ahmedelgabri/tmux-agent-panel"
 			root = filepath.Join(dir, "git", "github.com", "ahmedelgabri", "tmux-agent-panel")
 		case strings.HasPrefix(source, "npm:"):
 			spec := strings.TrimSpace(strings.TrimPrefix(source, "npm:"))
-			if spec != "pi-tmux-agent-panel" && !strings.HasPrefix(spec, "pi-tmux-agent-panel@") {
+			name, version, versioned := strings.Cut(spec, "@")
+			if name != "pi-tmux-agent-panel" || (versioned && version == "") {
 				continue
 			}
-			root = piNpmRoot(dir, config.NpmCommand)
+			identity = "npm:" + name
 		default:
 			root, err = piLocalPath(dir, source)
 			if err != nil {
@@ -191,6 +186,30 @@ func piNative() (string, error) {
 			if root == "" {
 				continue
 			}
+			identity = "local:" + root
+		}
+		// Pi keeps the first user-scope entry by identity, even when disabled.
+		// Versions/refs do not distinguish npm/git packages; local paths do.
+		if seen[identity] {
+			continue
+		}
+		seen[identity] = true
+		var filtered struct {
+			Extensions []string `json:"extensions"`
+			Autoload   *bool    `json:"autoload"`
+		}
+		if objectForm {
+			if err := json.Unmarshal(raw, &filtered); err != nil {
+				return "", fmt.Errorf("pi package settings: %w", err)
+			}
+		}
+		autoload := filtered.Autoload == nil || *filtered.Autoload
+		if len(filtered.Extensions) == 0 && (filtered.Extensions != nil || !autoload) {
+			continue
+		}
+		if strings.HasPrefix(identity, "npm:") {
+			root = piNpmRoot(dir, config.NpmCommand)
+		} else if strings.HasPrefix(identity, "local:") {
 			var manifest struct{ Name string }
 			if readConfig(filepath.Join(root, "package.json"), &manifest) != nil || manifest.Name != "pi-tmux-agent-panel" {
 				continue
