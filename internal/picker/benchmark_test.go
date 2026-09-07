@@ -9,7 +9,7 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
 )
 
-// BenchmarkRefresh compares the complete reload command with in-process
+// BenchmarkRefresh compares cached reloads, in-process polling, and standalone
 // listing. Every tmux command targets a private server, including cleanup.
 func BenchmarkRefresh(b *testing.B) {
 	if _, err := exec.LookPath("tmux"); err != nil {
@@ -33,6 +33,7 @@ func BenchmarkRefresh(b *testing.B) {
 	b.Setenv("TMUX_PANE", "%0")
 	b.Setenv(panes.CurrentPaneEnv, "%0")
 	b.Setenv("FZF_PROMPT", PromptAll)
+	b.Setenv(panes.SnapshotEnv, "")
 	tmx("new-session", "-d", "-s", "bench", "sleep 300")
 	b.Cleanup(func() { _ = exec.Command("tmux", "-S", socket, "kill-server").Run() })
 	tmx("set-option", "-p", "-t", "%0", "@agent_name", "codex")
@@ -49,10 +50,26 @@ func BenchmarkRefresh(b *testing.B) {
 			}
 		}
 	})
-	b.Run("in-process-tmux", func(b *testing.B) {
+	b.Run("in-process-poll", func(b *testing.B) {
 		for b.Loop() {
-			if _, err := panes.List(false, home); err != nil {
+			if _, err := panes.ListViews(home); err != nil {
 				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("cached-reload", func(b *testing.B) {
+		snapshot, err := panes.ListViews(home)
+		if err != nil {
+			b.Fatal(err)
+		}
+		cache := filepath.Join(dir, "rows.json")
+		if err := snapshot.Write(cache); err != nil {
+			b.Fatal(err)
+		}
+		b.Setenv(panes.SnapshotEnv, cache)
+		for b.Loop() {
+			if out, err := exec.Command("sh", "-c", shellQuote(binary)+" __list").CombinedOutput(); err != nil {
+				b.Fatalf("cached reload: %v: %s", err, out)
 			}
 		}
 	})
