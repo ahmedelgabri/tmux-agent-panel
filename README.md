@@ -22,7 +22,7 @@ nix run github:ahmedelgabri/tmux-agent-panel
 go build -o tap ./cmd/tap/
 ```
 
-Then wire the agent hooks. Installation is idempotent, preserves a backup of each original JSON config, and only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`. The pi extension is overwritten without a backup.
+Then wire the agent hooks. Installation leaves hook contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`. The pi extension is overwritten without a backup.
 
 ```sh
 tap install
@@ -114,7 +114,7 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 
 ## Notes and caveats
 
-- `tap install` splices hooks into existing JSON configs without reformatting unrelated content. It saves the original config to `*.tap.bak` before the first modification; reinstall and uninstall never overwrite that backup. Symlinked JSON configs are followed so writes land in the target and the symlink stays intact. The pi extension is replaced wholesale without a backup.
+- `tap install` splices hooks into existing JSON configs without reformatting unrelated content. Install and uninstall back up the pre-run bytes before every rewrite to `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, including reinstalls that leave identical contents. Same-second collisions add `-1`, `-2`, etc. before `.tap.bak`, so later hand edits remain recoverable and no backup is overwritten. Old backups are never pruned. Symlinked JSON configs are followed; backups are created beside the target, and the symlink stays intact. The pi extension is replaced wholesale without a backup.
 - Installed hooks invoke `tap` from `PATH` (same commands the plugins ship), so upgrading or moving the binary never breaks them; `tap doctor` checks that `tap` is actually on `PATH`.
 - The Claude hook set needs Claude Code ≥ 2.1.78 (when the newest wired event, `StopFailure`, shipped): before 2.1.101 an unknown hook event made Claude ignore the entire settings.json, so `tap install` refuses versions that predate any wired event rather than risk the user's config.
 - Claude's `blocked` fires immediately via the `PermissionRequest` hook (the `permission_prompt` notification only fires after a few seconds of user inactivity, and still routes to `blocked` as reinforcement). Approving a request runs the tool without re-firing `PreToolUse`, so `PostToolUse`/`PostToolUseFailure` map to `running` to clear `blocked` once the tool reports back; a denial clears on the agent's next tool call or `Stop`.
@@ -143,7 +143,7 @@ GitHub retains at most 100 pending runs in this group and cancels additional run
 
 Run `just bench-refresh --benchtime=2s --count=3` to compare the current shell/tap/tmux reload command with in-process pane listing. The benchmark builds a temporary binary and uses a private tmux server; it never targets your running server.
 
-On an Apple M4 Max with Go 1.26.4 and tmux 3.7b, one active agent pane took 11.4 to 13.6 ms per full reload versus 3.77 to 3.88 ms for in-process listing. These are wall-clock timings, not CPU usage, and exclude fzf rendering and HTTP delivery. The 200 ms polling interval remains unchanged. Eliminating command startup would save time, but would also require a different reload transport; measure larger pane sets before adding that complexity.
+The benchmark reports wall-clock timings, not CPU usage, and excludes fzf rendering and HTTP delivery. Run it with representative pane counts on your own machine before changing the 200 ms polling interval or reload transport.
 
 ## License
 

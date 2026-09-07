@@ -3,6 +3,7 @@
 load test_helper
 
 setup() {
+	# Doctor must never inspect the user's running tmux server.
 	start_server
 	export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
 	export CODEX_HOME="$BATS_TEST_TMPDIR/codex"
@@ -44,12 +45,16 @@ teardown() {
 	[ ! -f "$PI_CODING_AGENT_DIR/extensions/tap-agent-state.ts" ]
 }
 
-@test "install and uninstall preserve the original backup" {
+@test "install and uninstall back up the file before every modification" {
 	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/original.json"
 	"$TAP" install --claude
-	"$TAP" install --claude
+	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/installed.json"
 	"$TAP" uninstall --claude
-	cmp "$BATS_TEST_TMPDIR/original.json" "$CLAUDE_CONFIG_DIR/settings.json.tap.bak"
+	backups=("$CLAUDE_CONFIG_DIR"/settings.json.*.tap.bak)
+	[ "${#backups[@]}" -eq 2 ]
+	# Same-second counter suffixes do not sort by creation order.
+	cmp -s "$BATS_TEST_TMPDIR/original.json" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/original.json" "${backups[1]}"
+	cmp -s "$BATS_TEST_TMPDIR/installed.json" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/installed.json" "${backups[1]}"
 }
 
 @test "install preserves user formatting byte-for-byte" {

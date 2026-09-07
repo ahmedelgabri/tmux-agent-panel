@@ -4,11 +4,16 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/ahmedelgabri/tmux-agent-panel/plugins"
 )
+
+const Marker = "tap state"
 
 // existing simulates a user settings.json with hooks tap must not touch.
 const existing = `{
@@ -72,8 +77,8 @@ func TestInstallPreservesForeignHooks(t *testing.T) {
 	if !hooksInstalled(path) {
 		t.Errorf("hooksInstalled should be true after install")
 	}
-	if _, err := os.Stat(path + ".tap.bak"); err != nil {
-		t.Errorf("backup missing: %v", err)
+	if got := backups(t, path); !slices.Equal(got, []string{existing}) {
+		t.Errorf("backups = %q, want original settings", got)
 	}
 }
 
@@ -103,24 +108,84 @@ func TestOwnsCommand(t *testing.T) {
 	}
 }
 
-func TestInstallPreservesOriginalBackup(t *testing.T) {
+// Compare contents rather than filenames: counter suffixes do not sort by age.
+func backups(t *testing.T, path string) []string {
+	t.Helper()
+	names, err := filepath.Glob(path + ".*.tap.bak")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, name := range names {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, string(data))
+	}
+	slices.Sort(out)
+	return out
+}
+
+func TestBackupBeforeEveryModification(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, operation := range []func() error{
-		func() error { return installHooks(path, testHooks) },
-		func() error { return installHooks(path, testHooks) },
-		func() error { return uninstallHooks(path) },
-	} {
-		if err := operation(); err != nil {
+	steps := []struct {
+		run    func() error
+		backup bool
+	}{
+		{func() error { return installHooks(path, testHooks) }, true},
+		{func() error { return installHooks(path, testHooks) }, true},
+		{func() error { return os.WriteFile(path, []byte(`{"theme": "dark", "hooks": {}}`), 0o644) }, false},
+		{func() error { return installHooks(path, testHooks) }, true},
+		{func() error { return uninstallHooks(path) }, true},
+	}
+	var want []string
+	for _, step := range steps {
+		before, err := os.ReadFile(path)
+		if err != nil {
 			t.Fatal(err)
 		}
-		data, err := os.ReadFile(path + ".tap.bak")
-		if err != nil || string(data) != existing {
-			t.Fatalf("original backup changed: %q, %v", data, err)
+		if err := step.run(); err != nil {
+			t.Fatal(err)
+		}
+		if step.backup {
+			want = append(want, string(before))
+			slices.Sort(want)
+		}
+		if got := backups(t, path); !slices.Equal(got, want) {
+			t.Fatalf("backups = %q, want %q", got, want)
 		}
 	}
+}
+
+func TestBackupSameSecond(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		stamp := time.Now().Format("20060102T150405")
+		names := []string{
+			path + "." + stamp + ".tap.bak",
+			path + "." + stamp + "-1.tap.bak",
+			path + "." + stamp + "-2.tap.bak",
+		}
+		for _, name := range names {
+			if err := backup(path, []byte(name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, name := range names {
+			data, err := os.ReadFile(name)
+			if err != nil || string(data) != name {
+				t.Fatalf("backup %s: %q, %v", name, data, err)
+			}
+			info, err := os.Stat(name)
+			if err != nil || info.Mode().Perm() != 0o600 {
+				t.Fatalf("backup must be private: %v, %v", info, err)
+			}
+		}
+	})
 }
 
 func TestInstallPreservesHookMentions(t *testing.T) {
