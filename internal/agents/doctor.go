@@ -54,7 +54,11 @@ func Doctor() []Check {
 			fmt.Fprintf(&b, ", hooks installed (%s)", path)
 		case installed:
 			ok = false
-			fmt.Fprintf(&b, ", hooks outdated. Run `tap install` (%s)", path)
+			if native != "" && nativeErr == nil {
+				fmt.Fprintf(&b, ", hooks outdated. Remove direct wiring with `tap uninstall --%s` (%s)", a.Name, path)
+			} else {
+				fmt.Fprintf(&b, ", hooks outdated. Run `tap install` (%s)", path)
+			}
 		case native == "" && nativeErr == nil:
 			fmt.Fprintf(&b, ", user hooks not installed (%s)", path)
 		}

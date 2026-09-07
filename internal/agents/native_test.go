@@ -183,6 +183,8 @@ func TestDoctorPiWiring(t *testing.T) {
 		{"current", "current", true, true},
 		{"absent", "absent", true, false},
 		{"stale", "current", true, false},
+		{"stale", "absent", true, false},
+		{"stale", "missing", true, false},
 		{"current", "stale", true, false},
 		{"current", "missing", true, false},
 		{"absent", "absent", false, true},
@@ -218,8 +220,17 @@ func TestDoctorPiWiring(t *testing.T) {
 				if tc.native == "current" && (!strings.Contains(check.Detail, "native package installed") || strings.Contains(check.Detail, "not installed")) {
 					t.Errorf("native install misreported: %+v", check)
 				}
-				if tc.direct == "current" && tc.native == "current" && !strings.Contains(check.Detail, "both install channels") {
+				if tc.direct != "absent" && tc.native == "current" && !strings.Contains(check.Detail, "both install channels") {
 					t.Errorf("duplicate install not reported: %+v", check)
+				}
+				if tc.direct == "stale" {
+					want, unwanted := "tap install", "tap uninstall"
+					if tc.native == "current" {
+						want, unwanted = "tap uninstall --pi", "tap install"
+					}
+					if !strings.Contains(check.Detail, want) || strings.Contains(check.Detail, unwanted) {
+						t.Errorf("incorrect recovery advice: %+v", check)
+					}
 				}
 				return
 			}
