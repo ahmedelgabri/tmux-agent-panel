@@ -19,6 +19,7 @@ func TestPiNativePackageDeduplication(t *testing.T) {
 		{"npm versions", npm + "@0.1.12", npm + "@0.2.0", true},
 		{"npm unpinned", npm, npm + "@0.1.12", true},
 		{"npm whitespace", "npm: pi-tmux-agent-panel@^0.1.0 ", npm, true},
+		{"npm BOM", "npm:\ufeffpi-tmux-agent-panel@^0.1.0\ufeff", npm, true},
 		{"git refs", git + "@v0.1.12", git + "@main", true},
 		{"git transports", "git:git@github.com:ahmedelgabri/tmux-agent-panel.git@main", "https://github.com/ahmedelgabri/tmux-agent-panel", true},
 		{"git SSH", "ssh://git@github.com/ahmedelgabri/tmux-agent-panel.git", git, true},
