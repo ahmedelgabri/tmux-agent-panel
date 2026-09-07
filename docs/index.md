@@ -13,7 +13,7 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
 ## Features
 
-- **Live agent status** per pane: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. State is polled every 200 ms; the list reloads only when rows change, after a pause in typing. Preview output refreshes independently.
+- **Live agent status** per pane: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. State is polled every 200 ms; the list reloads only when rows change, after a pause in typing. Preview output and the animated running glyph refresh independently without rebuilding the list.
 - **Blocked-first ordering** so permission requests surface immediately
 - **Hook installation** with `tap install` backs up existing JSON configs before every rewrite, including byte-identical reinstalls. `tap uninstall` also backs up JSON configs before removing direct tap hooks. Backups use `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, with `-1`, `-2`, etc. before `.tap.bak` for same-second collisions; none are overwritten or pruned. The managed pi extension is overwritten without a backup and removed by `tap uninstall`.
 - **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)

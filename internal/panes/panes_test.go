@@ -53,13 +53,43 @@ func TestCachedList(t *testing.T) {
 func TestRowsDoNotChangeWithClock(t *testing.T) {
 	t.Setenv(CurrentPaneEnv, "%2")
 	synctest.Test(t, func(t *testing.T) {
-		before := Render(BuildRows(fixture, listOptions(false, "/Users/x")))
+		before, _ := renderPicker(BuildRows(fixture, listOptions(false, "/Users/x")))
 		time.Sleep(time.Second)
-		after := Render(BuildRows(fixture, listOptions(false, "/Users/x")))
+		after, _ := renderPicker(BuildRows(fixture, listOptions(false, "/Users/x")))
 		if after != before {
 			t.Fatal("clock-only changes must not trigger list reloads")
 		}
 	})
+}
+
+func TestPickerFrames(t *testing.T) {
+	rows := BuildRows(fixture, Options{})
+	text, animated := renderPicker(rows)
+	if !animated {
+		t.Fatal("running agent must animate")
+	}
+	for i, wire := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
+		fields := strings.Split(wire, "\t")
+		if len(fields) != 4+len(spinnerFrames) || fields[0] != rows[i].PaneID || fields[1] != rows[i].Addr {
+			t.Fatalf("invalid picker fields: %q", fields)
+		}
+		for frame, glyph := range spinnerFrames {
+			display := fields[2] + fields[3+frame] + fields[3+len(spinnerFrames)]
+			want := rows[i].Display
+			if rows[i].spinnerPrefix != "" {
+				want = rows[i].spinnerPrefix + glyph + rows[i].spinnerSuffix
+			}
+			if display != want {
+				t.Errorf("pane %s frame %d: %q, want %q", rows[i].PaneID, frame, display, want)
+			}
+		}
+	}
+	if PickerFields(0) != PickerFields(len(spinnerFrames)) || PickerFields(0) == PickerFields(1) {
+		t.Fatal("picker fields must cycle through spinner frames")
+	}
+	if _, animated := renderPicker(BuildRows([]string{fixture[0], fixture[3], fixture[4]}, Options{})); animated {
+		t.Fatal("plain, blocked, and idle panes must not animate")
+	}
 }
 
 func TestOrphaned(t *testing.T) {

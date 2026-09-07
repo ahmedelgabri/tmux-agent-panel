@@ -39,7 +39,7 @@ Open the picker from any shell inside tmux:
 tap pick
 ```
 
-The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. Pane state is polled every 200 ms, but the list reloads only when rows change and after a pause in typing. Preview output refreshes independently without rebuilding the list. Selection follows the pane ID when state changes reorder the rows.
+The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. Pane state is polled every 200 ms, but the list reloads only when rows change and after a pause in typing. Preview output and busy glyphs refresh independently without rebuilding the list. Selection follows the pane ID when state changes reorder the rows.
 
 Bind it wherever you like, e.g. a zsh widget on `C-Space`:
 
@@ -60,7 +60,7 @@ bind-key Space run-shell 'tap pick'
 ### Reading the list
 
 - Rows lead with an icon instead of a `session:window.pane` column: agent panes show their agent — yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi — and plain panes show the pane type, `❐` session or `⧉` persistent popup (`popup_*` sessions). The full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
-- State glyphs: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. The running glyph is static so animation never interrupts input with a list reload.
+- State glyphs: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. The running glyph animates every 200 ms through display-only updates, without interrupting input with a list reload.
 - The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
 
 ## Installing through each agent's own package manager

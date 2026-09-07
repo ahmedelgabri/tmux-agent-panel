@@ -7,9 +7,10 @@
 // --in-popup` via `tmux display-popup -E` and the inner invocation runs fzf
 // plain, owning the whole popup.
 //
-// An in-process poller reloads fzf only when pane rows change, after a
-// pause in typing. fzf exports FZF_PROMPT to reload children, so `tap __list`
-// preserves the active view. --track pins the cursor across reloads.
+// An in-process poller animates busy glyphs through fzf's display fields.
+// Only pane changes reload the list, after a pause in typing. fzf exports
+// FZF_PROMPT to reload children so `tap __list` preserves the active view.
+// --track pins the cursor across reloads.
 package picker
 
 import (
@@ -138,7 +139,7 @@ func buildArgs(self, sock, prompt string) []string {
 		"--reverse",
 		"--padding", "1,2",
 		"--delimiter", "\t",
-		"--with-nth", "3..",
+		"--with-nth", panes.PickerFields(0),
 		"--track",
 		"--id-nth", "1",
 		"--with-shell", "sh -c",
@@ -183,9 +184,9 @@ func confirmKill(kind string) string {
 	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && tmux kill-%s -t {1}`, kind, kind)
 }
 
-// Tracked reloads block fzf input. Compare stable rows before reloading and
-// wait for a pause in query edits; preview refreshes do not block input.
-// Poll all panes so changes are noticed regardless of the active view.
+// Pane-ID-tracked reloads block fzf input. Spinner frames instead change the
+// display projection, which leaves input live. Defer actual list changes until
+// query edits pause, polling all panes regardless of the active view.
 func refreshLoop(sock, self, cache string, lastRows panes.Snapshot, list func() (panes.Snapshot, error), stop <-chan struct{}) {
 	client := &http.Client{
 		Timeout: time.Second,
@@ -199,6 +200,7 @@ func refreshLoop(sock, self, cache string, lastRows panes.Snapshot, list func() 
 	defer client.CloseIdleConnections()
 	var lastQuery string
 	var quietAfter time.Time
+	frame := 0
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -224,19 +226,31 @@ func refreshLoop(sock, self, cache string, lastRows panes.Snapshot, list func() 
 				lastQuery = status.Query
 				quietAfter = now.Add(400 * time.Millisecond)
 			}
-			if status.Reading || now.Before(quietAfter) {
+			if status.Reading {
 				continue
 			}
-			rows, err := list()
-			if err != nil {
-				continue
+			rows := lastRows
+			if now.Before(quietAfter) {
+				if !rows.Animated {
+					continue
+				}
+			} else {
+				rows, err = list()
+				if err != nil {
+					continue
+				}
 			}
 			action := "refresh-preview"
+			// Combining frame transforms with a reload can make fzf restore
+			// pane tracking against the old rows instead of the new snapshot.
 			if rows != lastRows {
 				if err := rows.Write(cache); err != nil {
 					continue
 				}
 				action = reloadAction(self)
+			} else if rows.Animated {
+				frame++
+				action = "change-with-nth(" + panes.PickerFields(frame) + ")+" + action
 			}
 			resp, err = client.Post("http://localhost/", "text/plain", strings.NewReader(action))
 			if err == nil {
