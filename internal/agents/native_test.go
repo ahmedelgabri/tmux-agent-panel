@@ -178,6 +178,31 @@ func TestPiExtensionFilters(t *testing.T) {
 		{[]string{"+extensions/tap-agent-state.ts"}, false, true},
 		{[]string{"extensions/*.ts"}, false, true},
 		{[]string{"!extensions/other.ts"}, false, false},
+		{[]string{"-extensions/tap-agent-state.ts", "+extensions/tap-agent-state.ts"}, false, true},
+		{[]string{"+extensions/tap-agent-state.ts", "-extensions/tap-agent-state.ts"}, false, false},
+		{[]string{"+extensions/tap-agent-state.ts", "!**/*.ts"}, false, false},
+		{[]string{"!**/*.ts", "+extensions/tap-agent-state.ts"}, false, true},
+		{[]string{"-extensions/tap-agent-state.ts", "extensions/**/*.ts"}, false, true},
+		{[]string{"extensions/**/*.ts", "!**/*.ts", "**/{tap,other}-agent-state.ts"}, false, true},
+		{[]string{"extensions/**/*.ts", "other/**"}, false, true},
+		{[]string{"extensions/**/*.ts", "-extensions/*.ts"}, false, true},
+		{[]string{"+tap-agent-state.ts"}, false, false},
+		{[]string{"+./extensions/tap-agent-state.ts"}, false, true},
+		{[]string{"extensions/**/tap-agent-state.ts"}, false, true},
+		{[]string{"**/extensions/**/tap-agent-state.ts"}, true, true},
+		{[]string{"extensions/**/**/tap-agent-state.ts"}, true, true},
+		{[]string{"extensions/*/tap-agent-state.ts"}, true, false},
+		{[]string{"extensions/**/*.{ts,js}"}, true, true},
+		{[]string{"{extensions,other}/tap-agent-state.ts"}, true, true},
+		{[]string{"extensions/+(tap|other)-agent-state.ts"}, true, true},
+		{[]string{"extensions/!(other).ts"}, true, true},
+		{[]string{"extensions/[!x]ap-agent-state.ts"}, true, true},
+		{[]string{"./extensions/*.ts"}, true, false},
+		{[]string{"/packages/tap/**/*.ts"}, false, true},
+		{[]string{"+/packages/tap/extensions/tap-agent-state.ts"}, false, true},
+		{[]string{"/packages/tap/**/*.ts", "-/packages/tap/extensions/tap-agent-state.ts"}, false, false},
+		{[]string{"/packages/other/**/*.ts"}, true, false},
+		{[]string{"+extensions/tap-agent-state.ts", "!**/*.ts"}, true, true},
 		{[]string{"extensions/other.ts"}, true, false},
 		{[]string{"extensions/other.ts", "*.ts"}, true, true},
 		{[]string{"*.ts", "!extensions/*.ts"}, true, false},
@@ -187,7 +212,7 @@ func TestPiExtensionFilters(t *testing.T) {
 		{[]string{"[invalid"}, true, false},
 		{[]string{""}, true, false},
 	} {
-		if got := piExtensionEnabled(tc.filters, tc.autoload); got != tc.want {
+		if got := piExtensionEnabled("/packages/tap", tc.filters, tc.autoload); got != tc.want {
 			t.Errorf("filters %v, autoload %v: got %v, want %v", tc.filters, tc.autoload, got, tc.want)
 		}
 	}
