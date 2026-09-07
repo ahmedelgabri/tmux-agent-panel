@@ -17,7 +17,10 @@ teardown() {
 	if [ -z "${BATS_TEST_COMPLETED:-}" ]; then
 		if [ -S "${FZF_SOCKET:-}" ]; then picker_status >&2 || true; fi
 		if [ -n "${PICKER:-}" ]; then
-			tmx display-message -p -t "$PICKER" 'dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal}' >&2 || true
+			tmx display-message -p -t "$PICKER" 'dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal} pid=#{pane_pid}' >&2 || true
+			local pid
+			pid="$(tmx display-message -p -t "$PICKER" '#{pane_pid}')"
+			ps -p "$pid" -o pid,ppid,stat,command >&2 || true
 			tmx capture-pane -p -t "$PICKER" >&2 || true
 		fi
 	fi
