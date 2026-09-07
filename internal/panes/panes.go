@@ -59,6 +59,16 @@ type Row struct {
 	PaneID  string
 	Addr    string
 	Display string
+
+	// Split busy rows so fzf can animate the glyph without reloading items.
+	spinnerPrefix, spinnerSuffix string
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠇"}
+
+// PickerFields selects a spinner frame from the immutable picker row fields.
+func PickerFields(frame int) string {
+	return fmt.Sprintf("{3}{%d}{%d}", 4+frame%len(spinnerFrames), 4+len(spinnerFrames))
 }
 
 // Options carries the ambient inputs so BuildRows stays pure and testable.
@@ -197,11 +207,15 @@ func BuildRows(lines []string, o Options) []Row {
 		lead := mark + " " + icon + "  " + pad(p.Window, winWidth) + "  "
 
 		if e.isAgent {
-			display := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  " +
-				stateGlyph(e.state) + " " + pad(e.task, taskWidth) + "  " +
-				ansi.Gray + p.Path + ansi.Reset
+			prefix := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  "
+			suffix := " " + pad(e.task, taskWidth) + "  " + ansi.Gray + p.Path + ansi.Reset
+			row := Row{PaneID: p.ID, Addr: p.Addr, Display: prefix + stateGlyph(e.state) + suffix}
+			if e.state == "running" {
+				row.spinnerPrefix = prefix + state.ByName(e.state).Color
+				row.spinnerSuffix = ansi.Reset + suffix
+			}
 			agentRows = append(agentRows, agentRow{
-				row:  Row{PaneID: p.ID, Addr: p.Addr, Display: display},
+				row:  row,
 				rank: state.ByName(e.state).Rank,
 			})
 		} else {
@@ -237,8 +251,7 @@ func BuildRows(lines []string, o Options) []Row {
 	return rows
 }
 
-// Render emits rows in the picker's wire format: pane_id, address, display,
-// tab-separated. fzf hides the first two via --with-nth=3...
+// Render emits standalone list rows: pane_id, address, display, tab-separated.
 func Render(rows []Row) string {
 	var b strings.Builder
 	for _, r := range rows {
@@ -286,6 +299,7 @@ const SnapshotEnv = "TAP_PICKER_SNAPSHOT"
 type Snapshot struct {
 	All, Agents string
 	HasAgents   bool
+	Animated    bool
 }
 
 // Write publishes both views together so toggling cannot read a partial update.
@@ -334,12 +348,38 @@ func ListViews(home string) (Snapshot, error) {
 	lines := strings.Split(out, "\n")
 	o := listOptions(true, home)
 	agents := BuildRows(lines, o)
+	agentText, animated := renderPicker(agents)
 	o.AgentsOnly = false
+	allText, _ := renderPicker(BuildRows(lines, o))
 	return Snapshot{
-		All:       Render(BuildRows(lines, o)),
-		Agents:    Render(agents),
+		All:       allText,
+		Agents:    agentText,
 		HasAgents: selectable(agents),
+		Animated:  animated,
 	}, nil
+}
+
+// Each snapshot carries all spinner frames. change-with-nth changes only the
+// display projection, avoiding the input blocking caused by tracked reloads.
+func renderPicker(rows []Row) (string, bool) {
+	var b strings.Builder
+	animated := false
+	for _, r := range rows {
+		prefix := r.Display
+		if r.spinnerPrefix != "" {
+			prefix = r.spinnerPrefix
+			animated = true
+		}
+		b.WriteString(r.PaneID + "\t" + r.Addr + "\t" + prefix)
+		for _, glyph := range spinnerFrames {
+			b.WriteByte('\t')
+			if r.spinnerPrefix != "" {
+				b.WriteString(glyph)
+			}
+		}
+		b.WriteString("\t" + r.spinnerSuffix + "\n")
+	}
+	return b.String(), animated
 }
 
 // selectable reports whether any row targets a real pane — non-selectable

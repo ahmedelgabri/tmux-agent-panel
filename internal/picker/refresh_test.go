@@ -135,4 +135,17 @@ func TestRefreshLoop(t *testing.T) {
 			t.Errorf("reload snapshot for agents=%v: %q, %v", agentsOnly, got, err)
 		}
 	}
+
+	mu.Lock()
+	rows.Animated = true
+	mu.Unlock()
+	wantPost(reloadAction("/bin/tap"))
+	// Animation continues during query edits without tracked reloads.
+	for i, query := range []string{"t", "ta", "tap"} {
+		mu.Lock()
+		current.Query = query
+		mu.Unlock()
+		wantGet(status{Query: query})
+		wantPost("change-with-nth(" + panes.PickerFields(i+1) + ")+refresh-preview")
+	}
 }

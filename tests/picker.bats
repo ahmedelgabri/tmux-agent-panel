@@ -119,6 +119,37 @@ row_contains() {
 	picker_status | jq -e --arg pane "$1" --arg text "$2" '.matches[] | select(.text | startswith($pane + "\t")) | .text | contains($text)' >/dev/null
 }
 
+busy_icon() {
+	tmx capture-pane -p -t "$PICKER" | jq -Rrse '[split("\n")[] | select(contains("codex")) | scan("[⠋⠙⠹⠸⠼⠴⠦⠇]")] | if length == 1 then .[0] else empty end'
+}
+
+@test "busy icons animate while typing and navigating without list reloads" {
+	wait_for busy_icon
+	local query='codex codex codex codex' frames='' i
+	for ((i = 0; i < ${#query}; i++)); do
+		# Each key is sent once, including navigation below.
+		tmx send-keys -t "$PICKER" -l "${query:i:1}"
+		frames+="$(busy_icon)"$'\n'
+		picker_status | jq -e '.reading == false' >/dev/null
+		sleep 0.05
+	done
+	picker_status | jq -e --arg query "$query" '.query == $query' >/dev/null
+	# macOS locale collation can consider different braille glyphs equal.
+	[ "$(printf '%s' "$frames" | LC_ALL=C sort -u | wc -l)" -gt 1 ]
+	tmx send-keys -t "$PICKER" C-u
+	wait_for query_cleared
+	for ((i = 0; i < 6; i++)); do
+		tmx send-keys -t "$PICKER" Down
+		wait_for focused_on "$SECOND"
+		tmx send-keys -t "$PICKER" Up
+		wait_for focused_on "$TMUX_PANE"
+	done
+}
+
+query_cleared() {
+	picker_status | jq -e '.query == "" and .matchCount == 2' >/dev/null
+}
+
 @test "typing stays intact while agent state changes" {
 	local query='second second second second' i
 	for ((i = 0; i < ${#query}; i++)); do
