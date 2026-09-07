@@ -91,7 +91,8 @@ func codexNative() (string, error) {
 		return "", err
 	}
 	var config struct {
-		Plugins map[string]struct{ Enabled *bool }
+		Plugins  map[string]struct{ Enabled *bool }
+		Features struct{ Plugins *bool }
 	}
 	if err := toml.Unmarshal(data, &config); err != nil {
 		return "", fmt.Errorf("%s: %w", configPath, err)
@@ -100,6 +101,9 @@ func codexNative() (string, error) {
 	// Codex defaults a configured plugin to enabled when the field is omitted.
 	if !configured || (plugin.Enabled != nil && !*plugin.Enabled) {
 		return "", nil
+	}
+	if config.Features.Plugins != nil && !*config.Features.Plugins {
+		return "", fmt.Errorf("native plugin disabled by features.plugins = false (%s)", configPath)
 	}
 	base := filepath.Join(filepath.Dir(hooks), "plugins", "cache", "tmux-agent-panel", "tap-codex")
 	entries, err := os.ReadDir(base)

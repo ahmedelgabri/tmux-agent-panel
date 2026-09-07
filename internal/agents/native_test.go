@@ -103,6 +103,91 @@ func TestCodexNativeEnablement(t *testing.T) {
 	}
 }
 
+func TestCodexNativePluginFeature(t *testing.T) {
+	const table = "[plugins.\"tap-codex@tmux-agent-panel\"]\n"
+	const disabled = "[features]\nplugins = false\n"
+	for _, tc := range []struct {
+		name, config  string
+		active, gated bool
+	}{
+		{"omitted feature", table, true, false},
+		{"empty features", "[features]\n" + table, true, false},
+		{"enabled feature", "[features]\nplugins = true\n" + table, true, false},
+		{"disabled feature with default enablement", disabled + table, false, true},
+		{"disabled feature with explicit enablement", disabled + table + "enabled = true\n", false, true},
+		{"disabled plugin", disabled + table + "enabled = false\n", false, false},
+		{"absent plugin", disabled, false, false},
+		{"unrelated plugin", disabled + "[plugins.\"other@marketplace\"]\n", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("CODEX_HOME", dir)
+			config := filepath.Join(dir, "config.toml")
+			put(t, config, []byte(tc.config))
+			root := filepath.Join(dir, "plugins", "cache", "tmux-agent-panel", "tap-codex", "local")
+			put(t, filepath.Join(root, "hooks", "hooks.json"), plugins.CodexHooks)
+			for _, cached := range []bool{true, false} {
+				if !cached {
+					if err := os.RemoveAll(filepath.Join(dir, "plugins")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				detail, err := codexNative()
+				if (detail != "") != (tc.active && cached) {
+					t.Fatalf("cached=%v: %q, %v", cached, detail, err)
+				}
+				if tc.gated {
+					if err == nil || !strings.Contains(err.Error(), "features.plugins = false") || !strings.Contains(err.Error(), config) {
+						t.Fatalf("cached=%v: disabled feature must identify its config: %v", cached, err)
+					}
+				} else if (err != nil) != (tc.active && !cached) {
+					t.Fatalf("cached=%v: unexpected error: %v", cached, err)
+				}
+			}
+		})
+	}
+}
+
+func TestDoctorCodexPluginFeature(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	t.Setenv("PI_CODING_AGENT_DIR", t.TempDir())
+	bin := t.TempDir()
+	put(t, filepath.Join(bin, "codex"), []byte("#!/bin/sh\nexit 0\n"))
+	if err := os.Chmod(filepath.Join(bin, "codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	for _, tc := range []struct {
+		name, plugin string
+		direct, ok   bool
+	}{
+		{"native only", "[plugins.\"tap-codex@tmux-agent-panel\"]\n", false, false},
+		{"direct and gated native", "[plugins.\"tap-codex@tmux-agent-panel\"]\n", true, false},
+		{"direct only", "", true, true},
+		{"direct with disabled plugin", "[plugins.\"tap-codex@tmux-agent-panel\"]\nenabled = false\n", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("CODEX_HOME", dir)
+			put(t, filepath.Join(dir, "config.toml"), []byte("[features]\nplugins = false\n"+tc.plugin))
+			put(t, filepath.Join(dir, "plugins", "cache", "tmux-agent-panel", "tap-codex", "local", "hooks", "hooks.json"), plugins.CodexHooks)
+			if tc.direct {
+				put(t, filepath.Join(dir, "hooks.json"), plugins.CodexHooks)
+			}
+			for _, check := range Doctor() {
+				if check.Name != "codex" {
+					continue
+				}
+				if check.OK != tc.ok || strings.Contains(check.Detail, "features.plugins = false") != !tc.ok || strings.Contains(check.Detail, "native plugin installed") {
+					t.Fatalf("incorrect feature diagnostic: %+v", check)
+				}
+				return
+			}
+			t.Fatal("codex check missing")
+		})
+	}
+}
+
 func TestPiNative(t *testing.T) {
 	for _, source := range []string{
 		"https://github.com/ahmedelgabri/tmux-agent-panel",
