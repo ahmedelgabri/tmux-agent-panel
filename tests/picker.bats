@@ -19,8 +19,8 @@ teardown() {
 		if [ -n "${PICKER:-}" ]; then
 			tmx display-message -p -t "$PICKER" 'dead=#{pane_dead} status=#{pane_dead_status} signal=#{pane_dead_signal} pid=#{pane_pid}' >&2 || true
 			local pid
-			pid="$(tmx display-message -p -t "$PICKER" '#{pane_pid}')"
-			ps -p "$pid" -o pid,ppid,stat,command >&2 || true
+			pid="$(tmx display-message -p -t "$PICKER" '#{pane_pid}')" || pid=''
+			if [ -n "$pid" ]; then ps -p "$pid" -o pid,ppid,stat,command >&2 || true; fi
 			tmx capture-pane -p -t "$PICKER" >&2 || true
 		fi
 	fi
@@ -208,6 +208,35 @@ task_updated() {
 	)
 }
 
+@test "picker completion wakes its private server to collect a lost exit status" {
+	(
+		tmx() {
+			case "$*" in
+			*'#{pane_dead}') printf '%s\n' "$dead" ;;
+			*'#{pid}') echo 12345 ;;
+			*) printf '%s\n' "$exit_status" ;;
+			esac
+		}
+		kill() { printf 'signal:%s:%s\n' "$1" "$2"; }
+		picker_action() { printf 'action:%s\n' "$1"; }
+
+		dead=0 exit_status=''
+		run finish_picker abort
+		[ "$status" -eq 1 ]
+		[ "$output" = 'action:abort' ]
+
+		dead=1
+		run finish_picker abort
+		[ "$status" -eq 1 ]
+		[ "$output" = 'signal:-CHLD:12345' ]
+
+		exit_status=0
+		run finish_picker abort
+		[ "$status" -eq 0 ]
+		[ -z "$output" ]
+	)
+}
+
 client_attached() {
 	tmx list-clients -F '#{client_control_mode}' | grep -qx 1
 }
@@ -219,6 +248,12 @@ picker_exited() {
 
 finish_picker() {
 	if picker_exited; then return 0; fi
+	if [ "$(tmx display-message -p -t "$PICKER" '#{pane_dead}')" = 1 ]; then
+		# libutempter can consume SIGCHLD: https://github.com/tmux/tmux/issues/4559.
+		# Wake only the private server; success still requires a collected status.
+		kill -CHLD "$(tmx display-message -p '#{pid}')"
+		return 1
+	fi
 	picker_action "$1" && picker_exited
 }
 
