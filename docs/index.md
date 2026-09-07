@@ -15,7 +15,7 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 
 - **Live agent status** per pane: green spinner running, red `▲` blocked, yellow `?` waiting, dim `◌` idle — refreshed 5×/second while the picker is open
 - **Blocked-first ordering** so permission requests surface immediately
-- **Hook installation** with `tap install` preserves the original JSON configs in backups. Reinstall is idempotent; `tap uninstall` removes direct tap hooks and the managed pi extension. The pi extension is overwritten without a backup.
+- **Hook installation** with `tap install` backs up existing JSON configs before every rewrite, including byte-identical reinstalls. `tap uninstall` also backs up JSON configs before removing direct tap hooks. Backups use `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, with `-1`, `-2`, etc. before `.tap.bak` for same-second collisions; none are overwritten or pruned. The managed pi extension is overwritten without a backup and removed by `tap uninstall`.
 - **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)
 - **Embedded fzf** — no fzf installation, no version skew
 - **Agent-focused by default.** `ctrl-a` toggles all panes and `?` toggles the preview. Selection follows the pane across reordered updates. `ctrl-x` kills a pane immediately; `ctrl-w` and `ctrl-q` ask for confirmation before killing a window or session.

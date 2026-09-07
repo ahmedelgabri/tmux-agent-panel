@@ -5,7 +5,7 @@
 //
 // Edits are spliced into the original bytes with sjson/gjson so user
 // content keeps its exact key order, indentation, and escapes; a backup is
-// written next to the file before the first modification.
+// written next to the file before every modification.
 package agents
 
 import (
@@ -17,14 +17,12 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/junegunn/go-shellwords"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
-
-// Marker is the prefix of the canonical hook commands.
-const Marker = "tap state"
 
 // ownsCommand accepts direct invocations, including quoted absolute paths
 // from legacy installs. Mentions in another command and compound scripts
@@ -315,23 +313,30 @@ func checkWritable(path string) error {
 	return nil
 }
 
+// Snapshot every rewrite so edits made between tap runs remain recoverable.
 func backup(path string, data []byte) error {
-	path += ".tap.bak"
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if os.IsExist(err) {
-		return nil
-	}
-	if err != nil {
+	stamp := time.Now().Format("20060102T150405")
+	for n := 0; ; n++ {
+		name := fmt.Sprintf("%s.%s.tap.bak", path, stamp)
+		if n > 0 {
+			name = fmt.Sprintf("%s.%s-%d.tap.bak", path, stamp, n)
+		}
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		_, err = f.Write(data)
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			os.Remove(name)
+		}
 		return err
 	}
-	_, err = f.Write(data)
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		os.Remove(path)
-	}
-	return err
 }
 
 func writeJSON(path string, root map[string]any) error {
