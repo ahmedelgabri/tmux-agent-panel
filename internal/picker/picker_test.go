@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	fzf "github.com/junegunn/fzf/src"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 )
 
 func TestBuildArgs(t *testing.T) {
@@ -21,6 +23,25 @@ func TestBuildArgs(t *testing.T) {
 		}
 	}
 	t.Fatal("reload tracking needs a stable pane identity")
+}
+
+func TestKeymapFooter(t *testing.T) {
+	for key, action := range map[string]string{
+		"enter":  "switch pane",
+		"ctrl-a": "toggle all/agents",
+		"ctrl-p": "toggle preview",
+		"ctrl-x": "kill pane",
+		"ctrl-w": "kill window (confirm)",
+		"ctrl-q": "kill session (confirm)",
+	} {
+		want := ansi.Cyan + key + ansi.Gray + " " + action
+		if !strings.Contains(keymapFooter, want) {
+			t.Errorf("footer missing colored keymap %q", want)
+		}
+	}
+	if strings.Contains(keymapFooter, ":") {
+		t.Errorf("footer uses inconsistent separators: %q", keymapFooter)
+	}
 }
 
 func TestShellQuote(t *testing.T) {

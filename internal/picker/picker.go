@@ -29,6 +29,7 @@ import (
 
 	fzf "github.com/junegunn/fzf/src"
 
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
@@ -39,6 +40,19 @@ const (
 	PromptAll    = "» "
 	PromptAgents = "agents » "
 )
+
+var keymapFooter = " " + strings.Join([]string{
+	keymap("enter", "switch pane"),
+	keymap("ctrl-a", "toggle all/agents"),
+	keymap("ctrl-p", "toggle preview"),
+	keymap("ctrl-x", "kill pane"),
+	keymap("ctrl-w", "kill window (confirm)"),
+	keymap("ctrl-q", "kill session (confirm)"),
+}, " · ") + ansi.Reset + " "
+
+func keymap(key, action string) string {
+	return ansi.Cyan + key + ansi.Gray + " " + action
+}
 
 // Run shows the picker and switches to the chosen pane.
 func Run(inPopup bool) error {
@@ -150,19 +164,21 @@ func buildArgs(self, sock, prompt string) []string {
 		"--pointer", "▶",
 		"--info", "inline-right",
 		"--separator", "",
-		// The header label doesn't render without a header window, hence
-		// the blank header.
 		"--header", " ",
 		"--header-border", "line",
-		"--header-label", "ctrl-a all/agents · ? preview · kill: ctrl-x pane · confirm: ctrl-w window · ctrl-q session",
-		"--color", "bg+:-1,border:0,label:4,header-border:0,header-label:8",
-		"--bind", "?:toggle-preview",
+		"--footer", " ",
+		"--footer-border", "bottom",
+		"--footer-label", keymapFooter,
+		"--footer-label-pos", "-2",
+		"--color", "bg+:-1,border:0,label:4,header-border:0,footer:8,footer-border:0,footer-label:8",
+		"--bind", "ctrl-p:toggle-preview",
 		"--bind", "ctrl-a:transform:" + shellQuote(self) + " __toggle",
 		"--bind", "ctrl-x:execute-silent([ -n {1} ] && tmux kill-pane -t {1})+" + reload,
 		"--bind", "ctrl-w:execute(" + confirmKill("window") + ")+" + reload,
 		"--bind", "ctrl-q:execute(" + confirmKill("session") + ")+" + reload,
 		"--preview", "[ -n {1} ] && tmux capture-pane -ep -t {1} || true",
 		"--preview-window", "down,60%,border-top",
+		"--preview-label-pos", "3",
 		"--bind", `focus:transform-preview-label:printf " %s " {2}`,
 	}
 }

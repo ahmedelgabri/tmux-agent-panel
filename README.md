@@ -45,7 +45,7 @@ The picker opens focused on agent panes, or all panes if none are running.
 | -------- | ------------------------------------------------- |
 | `Enter`  | Switch to the highlighted pane                    |
 | `ctrl-a` | Toggle between agent panes and all panes          |
-| `?`      | Toggle the preview                                |
+| `ctrl-p` | Toggle the preview                                |
 | `ctrl-x` | Kill the highlighted pane immediately             |
 | `ctrl-w` | Confirm, then kill the highlighted pane's window  |
 | `ctrl-q` | Confirm, then kill the highlighted pane's session |
