@@ -9,6 +9,12 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+  # Retain up to 100 pending releases instead of replacing the waiting run.
+  queue: max
+
 jobs:
   build:
     name: Build Binaries
@@ -17,12 +23,15 @@ jobs:
     # [skip release]. workflow_run events carry the commit under
     # workflow_run.head_commit, not head_commit.
     if: >-
+      github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       !contains(github.event.workflow_run.head_commit.message, '[skip release]')
     steps:
       # Shallow checkout: this job only reads flake.nix and checks tags via
       # ls-remote; the changelog job fetches full history itself.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Get version from flake.nix
         id: version
@@ -108,6 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Download artifacts
@@ -134,6 +144,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
           name: v${{ needs.build.outputs.version }}
           body: |
             ## Changes

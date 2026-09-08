@@ -17,7 +17,7 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 - `.claude-plugin/` + `plugins/` — plugin marketplace for Claude Code (`tap`) and Codex (`tap-codex`); the hooks.json files are the single source of truth — `tap install` embeds them (`plugins/embed.go`) and merges them verbatim, so hook commands invoke `tap` from `PATH` in both channels
 - `.agents/plugins/marketplace.json` — Codex's native marketplace (per developers.openai.com/plugins: object-form `source`, unlike the Claude schema, so it cannot be a symlink to the Claude file); lists `tap-codex` only. `plugins/tap-codex/.codex-plugin/plugin.json` is a symlink to the Claude manifest (the schemas are compatible). Claude Code knows only `.claude-plugin/`; Codex reads that as a compat fallback when `.agents/` is absent
 - `package.json` + `extensions/` — pi package surface; `extensions/tap-agent-state.ts` is a symlink to `internal/agents/pi_extension.ts` (the canonical copy, embedded into the binary)
-- `.github/workflows/` — CI (lint/test/build), Pages deploy, and release (cross-compiled binaries; no Homebrew publishing)
+- `.github/workflows/` — CI (lint/test/build through Nix), Pages deploy, and release (cross-compiled binaries from the tested CI commit, followed by a Homebrew formula update)
 
 ## Conventions
 
