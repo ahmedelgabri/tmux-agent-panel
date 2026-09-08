@@ -26,7 +26,7 @@ func piLocalPath(dir, source string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		root = filepath.Join(home, strings.TrimPrefix(strings.TrimPrefix(root, "~"), "/"))
+		root = filepath.Join(home, strings.TrimPrefix(root[1:], "/"))
 	case strings.HasPrefix(root, "file://"):
 		u, err := url.Parse(root)
 		if err != nil {
