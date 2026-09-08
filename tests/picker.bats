@@ -46,6 +46,10 @@ picker_action() {
 	curl --silent --show-error --max-time 1 --unix-socket "$FZF_SOCKET" -X POST --data "$1" http://localhost/
 }
 
+picker_screen_contains() {
+	tmx capture-pane -p -t "$PICKER" | grep -F -- "$1" >/dev/null
+}
+
 focused_on() {
 	picker_status | jq -e --arg pane "$1" '.current.text | startswith($pane + "\t")' >/dev/null
 }
@@ -71,6 +75,13 @@ blocked_reload_started() {
 	if [ -f "$TMUX_TEST_DIR/reload-started" ]; then return 0; fi
 	picker_action "reload(touch '$TMUX_TEST_DIR/reload-started'; while [ -f '$TMUX_TEST_DIR/reload-started' ] && [ ! -f '$TMUX_TEST_DIR/reload-release' ]; do sleep 0.01; done; '$TAP' __list)"
 	return 1
+}
+
+@test "picker shows all keymaps in the footer" {
+	wait_for picker_screen_contains "ctrl-p toggle preview"
+	picker_screen_contains "ctrl-x kill pane"
+	picker_screen_contains "ctrl-w kill window (confirm)"
+	picker_screen_contains "ctrl-q kill session (confirm)"
 }
 
 @test "picker setup handles cursor actions dropped during a reload" {
