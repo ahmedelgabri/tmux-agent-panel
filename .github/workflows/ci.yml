@@ -43,27 +43,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Install Nix
+        uses: NixOS/nix-installer-action@main
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@v6
         with:
-          go-version-file: go.mod
-
-      - name: Setup just
-        uses: extractions/setup-just@v2
-
-      - name: Install bats and tmux
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update && sudo apt-get install -y bats tmux
-          else
-            brew install bats-core tmux
-          fi
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
 
       - name: Run unit tests (race)
-        run: just test-race
+        run: nix develop --command just test-race
 
       - name: Run E2E tests
-        run: just test-e2e
+        run: nix develop --command just test-e2e
 
   build:
     name: Build (Nix)

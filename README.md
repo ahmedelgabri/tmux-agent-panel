@@ -131,7 +131,13 @@ just build
 just check # vet + staticcheck + unit tests (race) + bats E2E + formatting + versions
 ```
 
-`flake.nix` is the version source of truth; after bumping it, run `just sync-versions` to mirror it into `package.json` and the plugin manifests. E2E tests run against a scratch tmux server on a private socket; they never touch your real tmux server or agent configs.
+`flake.nix` is the version source of truth; after bumping it, run `just sync-versions` to mirror it into `package.json` and the plugin manifests. CI runs lint, tests, and builds with the locked Nix environment on Linux and macOS. E2E tests run against a scratch tmux server on a private socket; they never touch your real tmux server or agent configs.
+
+### Releases
+
+Successful push CI runs on `main` trigger releases from the exact tested commit, unless the commit message contains `[skip release]` or the version tag already exists. Release publication and Homebrew updates share a [GitHub concurrency queue](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) with `queue: max`, so a third run does not replace a pending release.
+
+GitHub retains at most 100 pending runs in this group and cancels additional runs. Rerun those canceled release workflows once capacity is available. The queue follows arrival order, not version order; it does not guarantee publication of every version under failures or queue overflow.
 
 ## License
 
