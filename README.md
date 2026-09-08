@@ -22,7 +22,7 @@ nix run github:ahmedelgabri/tmux-agent-panel
 go build -o tap ./cmd/tap/
 ```
 
-Then wire the agent hooks. Installation leaves hook contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`. The pi extension is overwritten without a backup.
+Then wire the agent hooks. Installation leaves integration contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config or pi extension. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`.
 
 ```sh
 tap install
@@ -39,7 +39,18 @@ Open the picker from any shell inside tmux:
 tap pick
 ```
 
-The picker opens focused on agent panes, or all panes if none are running. `Enter` switches to the pane, `ctrl-a` toggles between the agents and all-panes views, and `?` toggles the preview. `ctrl-x` kills the highlighted pane immediately. `ctrl-w` and `ctrl-q` ask for confirmation before killing its window or session. Pane state is polled every 200 ms, but the list reloads only when rows change and after a pause in typing. Preview output and busy glyphs refresh independently without rebuilding the list. Selection follows the pane ID when state changes reorder the rows.
+The picker opens focused on agent panes, or all panes if none are running.
+
+| Key      | Action                                            |
+| -------- | ------------------------------------------------- |
+| `Enter`  | Switch to the highlighted pane                    |
+| `ctrl-a` | Toggle between agent panes and all panes          |
+| `?`      | Toggle the preview                                |
+| `ctrl-x` | Kill the highlighted pane immediately             |
+| `ctrl-w` | Confirm, then kill the highlighted pane's window  |
+| `ctrl-q` | Confirm, then kill the highlighted pane's session |
+
+Pane state is polled every 200 ms, but the list reloads only when rows change and after a pause in typing. Preview output and busy glyphs refresh independently without rebuilding the list. Selection follows the pane ID when state changes reorder the rows.
 
 Bind it wherever you like, e.g. a zsh widget on `C-Space`:
 
@@ -114,7 +125,7 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 
 ## Notes and caveats
 
-- `tap install` splices hooks into existing JSON configs without reformatting unrelated content. Install and uninstall back up the pre-run bytes before every rewrite to `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, including reinstalls that leave identical contents. Same-second collisions add `-1`, `-2`, etc. before `.tap.bak`, so later hand edits remain recoverable and no backup is overwritten. Old backups are never pruned. Symlinked JSON configs are followed; backups are created beside the target, and the symlink stays intact. The pi extension is replaced wholesale without a backup.
+- `tap install` splices hooks into existing JSON configs without reformatting unrelated content and replaces the pi extension wholesale. Install and uninstall back up existing JSON configs and pi extensions before every tap rewrite or managed removal to `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, including reinstalls that leave identical contents. Same-second collisions add `-1`, `-2`, etc. before `.tap.bak`, so later hand edits remain recoverable and no backup is overwritten. Old backups are never pruned. Symlinked JSON configs are followed; backups are created beside the target, and the symlink stays intact.
 - Installed hooks invoke `tap` from `PATH` (same commands the plugins ship), so upgrading or moving the binary never breaks them; `tap doctor` checks that `tap` is actually on `PATH`.
 - The Claude hook set needs Claude Code ≥ 2.1.78 (when the newest wired event, `StopFailure`, shipped): before 2.1.101 an unknown hook event made Claude ignore the entire settings.json, so `tap install` refuses versions that predate any wired event rather than risk the user's config.
 - Claude's `blocked` fires immediately via the `PermissionRequest` hook (the `permission_prompt` notification only fires after a few seconds of user inactivity, and still routes to `blocked` as reinforcement). Approving a request runs the tool without re-firing `PreToolUse`, so `PostToolUse`/`PostToolUseFailure` map to `running` to clear `blocked` once the tool reports back; a denial clears on the agent's next tool call or `Stop`.

@@ -46,15 +46,26 @@ teardown() {
 }
 
 @test "install and uninstall back up the file before every modification" {
+	local pi_path="$PI_CODING_AGENT_DIR/extensions/tap-agent-state.ts"
+	mkdir -p "${pi_path%/*}"
+	printf '%s\n' '// hand-written extension' >"$pi_path"
 	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/original.json"
-	"$TAP" install --claude
+	cp "$pi_path" "$BATS_TEST_TMPDIR/original.ts"
+	"$TAP" install --claude --pi
 	cp "$CLAUDE_CONFIG_DIR/settings.json" "$BATS_TEST_TMPDIR/installed.json"
-	"$TAP" uninstall --claude
+	cp "$pi_path" "$BATS_TEST_TMPDIR/installed.ts"
+	"$TAP" uninstall --claude --pi
+
 	backups=("$CLAUDE_CONFIG_DIR"/settings.json.*.tap.bak)
 	[ "${#backups[@]}" -eq 2 ]
 	# Same-second counter suffixes do not sort by creation order.
 	cmp -s "$BATS_TEST_TMPDIR/original.json" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/original.json" "${backups[1]}"
 	cmp -s "$BATS_TEST_TMPDIR/installed.json" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/installed.json" "${backups[1]}"
+
+	backups=("$PI_CODING_AGENT_DIR"/extensions/tap-agent-state.ts.*.tap.bak)
+	[ "${#backups[@]}" -eq 2 ]
+	cmp -s "$BATS_TEST_TMPDIR/original.ts" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/original.ts" "${backups[1]}"
+	cmp -s "$BATS_TEST_TMPDIR/installed.ts" "${backups[0]}" || cmp "$BATS_TEST_TMPDIR/installed.ts" "${backups[1]}"
 }
 
 @test "install preserves user formatting byte-for-byte" {

@@ -18,10 +18,10 @@ var installCmd = &cobra.Command{
 hook entries into Claude Code's settings.json and Codex's hooks.json
 (identified by direct 'tap state' invocations, so re-running is idempotent),
 and drops the pi extension into pi's extension directory. Install and
-uninstall back up existing JSON configs before every rewrite, including
-byte-identical reinstalls, to <file>.<YYYYMMDDTHHMMSS>.tap.bak. Same-second
-collisions add -1, -2, etc. before .tap.bak. Backups are never overwritten
-or pruned. The pi extension is overwritten without a backup.
+uninstall back up existing JSON configs and pi extensions before every
+rewrite or managed removal, including byte-identical reinstalls, to
+<file>.<YYYYMMDDTHHMMSS>.tap.bak. Same-second collisions add -1, -2, etc.
+before .tap.bak. Backups are never overwritten or pruned.
 
 By default only agents whose binary is on PATH are wired; pass --claude,
 --codex, or --pi to force a specific subset. Files managed by Nix/Home
