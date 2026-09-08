@@ -43,41 +43,44 @@ func piExtensionEnabled(root string, filters []string, autoload bool) bool {
 		pattern = filepath.ToSlash(pattern)
 		return pattern == piPackageExtension || pattern == full
 	}
+	matchFilter := func(filter string) (kind byte, matched bool) {
+		pattern := filter
+		if filter != "" {
+			switch filter[0] {
+			case '+', '-', '!':
+				kind, pattern = filter[0], filter[1:]
+			}
+		}
+		if kind == '+' || kind == '-' {
+			return kind, exact(pattern)
+		}
+		return kind, matches(pattern)
+	}
 	if !autoload {
 		enabled := false
 		for _, filter := range filters {
-			switch {
-			case strings.HasPrefix(filter, "+"), strings.HasPrefix(filter, "-"):
-				if exact(filter[1:]) {
-					enabled = filter[0] == '+'
-				}
-			case strings.HasPrefix(filter, "!"):
-				if matches(filter[1:]) {
-					enabled = false
-				}
-			default:
-				if matches(filter) {
-					enabled = true
-				}
+			if kind, matched := matchFilter(filter); matched {
+				enabled = kind == 0 || kind == '+'
 			}
 		}
 		return enabled
 	}
 	var included, excluded, forceIncluded, hasIncludes bool
 	for _, filter := range filters {
-		switch {
-		case strings.HasPrefix(filter, "-"):
+		kind, matched := matchFilter(filter)
+		switch kind {
+		case '-':
 			// Exact exclusions override every other filter in normal autoload.
-			if exact(filter[1:]) {
+			if matched {
 				return false
 			}
-		case strings.HasPrefix(filter, "+"):
-			forceIncluded = forceIncluded || exact(filter[1:])
-		case strings.HasPrefix(filter, "!"):
-			excluded = excluded || matches(filter[1:])
+		case '+':
+			forceIncluded = forceIncluded || matched
+		case '!':
+			excluded = excluded || matched
 		default:
 			hasIncludes = true
-			included = included || matches(filter)
+			included = included || matched
 		}
 	}
 	if forceIncluded {
@@ -86,8 +89,5 @@ func piExtensionEnabled(root string, filters []string, autoload bool) bool {
 	if excluded {
 		return false
 	}
-	if hasIncludes {
-		return included
-	}
-	return true
+	return !hasIncludes || included
 }

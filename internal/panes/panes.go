@@ -95,24 +95,16 @@ func ParsePane(line string) (Pane, bool) {
 // after an unclean agent exit. The picker warns about such panes and
 // doctor explains them; neither guesses an agent.
 func Orphaned(p Pane) bool {
-	if p.State == "" {
-		return false
-	}
-	if _, ok := agents.ByName(p.Agent); ok {
-		return false
-	}
-	_, ok := agents.ForCommand(p.Command)
-	return !ok
+	_, named := agents.ByName(p.Agent)
+	_, commanded := agents.ForCommand(p.Command)
+	return p.State != "" && !named && !commanded
 }
 
 // BuildRows renders panes into one sorted, column-aligned table.
 func BuildRows(lines []string, o Options) []Row {
 	type entry struct {
-		pane    Pane
-		meta    agents.Agent
-		isAgent bool
-		state   string
-		task    string
+		pane Pane
+		meta agents.Agent
 	}
 	var entries []entry
 	hasAgents := false
@@ -140,27 +132,24 @@ func BuildRows(lines []string, o Options) []Row {
 		if o.Home != "" && strings.HasPrefix(p.Path, o.Home) {
 			p.Path = "~" + strings.TrimPrefix(p.Path, o.Home)
 		}
-		e := entry{pane: p, meta: meta, isAgent: isAgent}
 		// The name column holds the agent name on agent rows and the pane
 		// command otherwise; it shares one width so the table stays aligned.
 		name := p.Command
 		if isAgent {
 			hasAgents = true
 			name = meta.Name
-			e.state = p.State
-			e.task = p.Task
 			// The task lives in the pane title for TaskFromTitle agents;
 			// the leading status glyph is dropped here.
-			if e.task == "" && meta.TaskFromTitle {
-				e.task = stripFirstWord(p.Title)
+			if p.Task == "" && meta.TaskFromTitle {
+				p.Task = stripFirstWord(p.Title)
 			}
-			if e.state == "" {
-				e.state = fallbackState(meta, p.Title)
+			if p.State == "" {
+				p.State = fallbackState(meta, p.Title)
 			}
-			if r := []rune(e.task); len(r) > state.TaskMaxLength {
-				e.task = string(r[:state.TaskMaxLength-1]) + "…"
+			if r := []rune(p.Task); len(r) > state.TaskMaxLength {
+				p.Task = string(r[:state.TaskMaxLength-1]) + "…"
 			}
-			if w := uniseg.StringWidth(e.task); w > taskWidth {
+			if w := uniseg.StringWidth(p.Task); w > taskWidth {
 				taskWidth = w
 			}
 		}
@@ -170,7 +159,7 @@ func BuildRows(lines []string, o Options) []Row {
 		if w := uniseg.StringWidth(name); w > cmdWidth {
 			cmdWidth = w
 		}
-		entries = append(entries, e)
+		entries = append(entries, entry{pane: p, meta: meta})
 	}
 
 	// Plain rows leave the agent rows' status slot — glyph, its trailing
@@ -201,23 +190,21 @@ func BuildRows(lines []string, o Options) []Row {
 		if strings.HasPrefix(p.Addr, "popup_") {
 			icon = ansi.Gray + "⧉" + ansi.Reset
 		}
-		if e.isAgent {
+		if e.meta.Name != "" {
 			icon = e.meta.Color + e.meta.Icon + ansi.Reset
 		}
 		lead := mark + " " + icon + "  " + pad(p.Window, winWidth) + "  "
 
-		if e.isAgent {
+		if e.meta.Name != "" {
 			prefix := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  "
-			suffix := " " + pad(e.task, taskWidth) + "  " + ansi.Gray + p.Path + ansi.Reset
-			row := Row{PaneID: p.ID, Addr: p.Addr, Display: prefix + stateGlyph(e.state) + suffix}
-			if e.state == "running" {
-				row.spinnerPrefix = prefix + state.ByName(e.state).Color
+			suffix := " " + pad(p.Task, taskWidth) + "  " + ansi.Gray + p.Path + ansi.Reset
+			status := state.ByName(p.State)
+			row := Row{PaneID: p.ID, Addr: p.Addr, Display: prefix + status.Color + status.Glyph + ansi.Reset + suffix}
+			if p.State == "running" {
+				row.spinnerPrefix = prefix + status.Color
 				row.spinnerSuffix = ansi.Reset + suffix
 			}
-			agentRows = append(agentRows, agentRow{
-				row:  row,
-				rank: state.ByName(e.state).Rank,
-			})
+			agentRows = append(agentRows, agentRow{row: row, rank: status.Rank})
 		} else {
 			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + plainGap + ansi.Gray + p.Path + ansi.Reset
 			plainRows = append(plainRows, Row{PaneID: p.ID, Addr: p.Addr, Display: display})
@@ -403,11 +390,6 @@ func pad(s string, width int) string {
 	return s
 }
 
-func stateGlyph(st string) string {
-	d := state.ByName(st)
-	return d.Color + d.Glyph + ansi.Reset
-}
-
 // TaskFromTitle agents prefix their pane title with a spinner glyph while
 // working and ✳ when waiting; use that until hooks set the option.
 func fallbackState(a agents.Agent, title string) string {
@@ -422,12 +404,7 @@ func fallbackState(a agents.Agent, title string) string {
 }
 
 func containsNonASCII(s string) bool {
-	for _, r := range s {
-		if r < ' ' || r > '~' {
-			return true
-		}
-	}
-	return false
+	return strings.IndexFunc(s, func(r rune) bool { return r < ' ' || r > '~' }) >= 0
 }
 
 func stripFirstWord(s string) string {
