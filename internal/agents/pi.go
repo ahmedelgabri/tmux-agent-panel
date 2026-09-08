@@ -37,6 +37,13 @@ func installPi() error {
 	if err := checkWritable(path); err != nil {
 		return err
 	}
+	if data, err := os.ReadFile(path); err == nil {
+		if err := backup(path, data); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -57,6 +64,12 @@ func uninstallPi() error {
 	}
 	if !strings.Contains(string(data), piMarker) {
 		return nil
+	}
+	if err := checkWritable(path); err != nil {
+		return err
+	}
+	if err := backup(path, data); err != nil {
+		return err
 	}
 	return os.Remove(path)
 }

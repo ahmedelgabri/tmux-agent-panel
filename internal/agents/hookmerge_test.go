@@ -161,6 +161,40 @@ func TestBackupBeforeEveryModification(t *testing.T) {
 	}
 }
 
+func TestPiBackupBeforeEveryModification(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", dir)
+	path := filepath.Join(dir, "extensions", "tap-agent-state.ts")
+	put(t, path, []byte("// hand-written"))
+	steps := []struct {
+		run    func() error
+		backup bool
+	}{
+		{installPi, true},
+		{installPi, true},
+		{func() error { return os.WriteFile(path, []byte(piMarker+"\n// hand edit"), 0o644) }, false},
+		{installPi, true},
+		{uninstallPi, true},
+	}
+	var want []string
+	for _, step := range steps {
+		before, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := step.run(); err != nil {
+			t.Fatal(err)
+		}
+		if step.backup {
+			want = append(want, string(before))
+			slices.Sort(want)
+		}
+		if got := backups(t, path); !slices.Equal(got, want) {
+			t.Fatalf("backups = %q, want %q", got, want)
+		}
+	}
+}
+
 func TestBackupSameSecond(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "settings.json")
@@ -543,12 +577,18 @@ func TestPiInstallRoundtrip(t *testing.T) {
 	if !piInstalled() {
 		t.Errorf("piInstalled should be true after install")
 	}
+	if got := backups(t, path); len(got) != 0 {
+		t.Fatalf("fresh install created backups: %q", got)
+	}
 
 	if err := uninstallPi(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("extension should be removed by uninstall")
+	}
+	if got := backups(t, path); !slices.Equal(got, []string{string(piExtension)}) {
+		t.Errorf("uninstall backup = %q, want installed extension", got)
 	}
 }
 
@@ -567,6 +607,9 @@ func TestPiUninstallSparesForeignFile(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("uninstall must not delete a file it does not own")
+	}
+	if got := backups(t, path); len(got) != 0 {
+		t.Errorf("unmodified foreign file created backups: %q", got)
 	}
 }
 
