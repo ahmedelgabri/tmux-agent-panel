@@ -84,6 +84,23 @@ blocked_reload_started() {
 	picker_screen_contains "ctrl-q kill session (confirm)"
 }
 
+@test "picker stays responsive after repeated terminal wait interruptions" {
+	local pid i
+	pid="$(tmx display-message -p -t "$PICKER" '#{pane_pid}')"
+	# SIGURG is handled by Go. Repeated delivery exercises fzf's EINTR retry
+	# path without sending a cancellation key or a termination signal.
+	# Signal delivery among Go threads varies; use more than the 100
+	# interruptions needed to reproduce junegunn/fzf#4917.
+	for ((i = 0; i < 1000; i++)); do
+		kill -URG "$pid"
+		sleep 0.005
+	done
+	picker_status | jq -e '.matchCount == 2' >/dev/null
+	tmx set-option -w -t "$PICKER" remain-on-exit on
+	wait_for finish_picker abort
+	[ "$(tmx display-message -p -t "$PICKER" '#{pane_dead_status}')" = 0 ]
+}
+
 @test "picker setup handles cursor actions dropped during a reload" {
 	wait_for blocked_reload_started
 	run select_second

@@ -2,6 +2,9 @@ module github.com/ahmedelgabri/tmux-agent-panel
 
 go 1.26.4
 
+// Avoid fzf aborting after 100 interrupted terminal waits: https://github.com/junegunn/fzf/issues/4917.
+replace github.com/junegunn/fzf => ./third_party/fzf
+
 require (
 	github.com/benjaminnkem/minimatch-go v0.1.0
 	github.com/junegunn/fzf v0.74.2

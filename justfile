@@ -18,12 +18,16 @@ test-race *args:
 bench-refresh *args:
     go test ./internal/picker -run '^$' -bench '^BenchmarkRefresh$' -benchmem {{ args }}
 
+# Run the patched fzf library's upstream tests
+test-fzf *args:
+    cd third_party/fzf && go test {{ args }} ./src/...
+
 # Run E2E tests (bats)
 test-e2e *args: build
     bats {{ args }} tests/
 
 # Run all tests (unit + E2E)
-test-all: test test-e2e
+test-all: test test-fzf test-e2e
 
 # Run go vet
 vet:
@@ -46,7 +50,7 @@ fmt-check:
     nix fmt -- --fail-on-change
 
 # Run all checks (lint + tests + race + E2E + format + versions)
-check: vet staticcheck test-race test-e2e fmt-check check-versions
+check: vet staticcheck test-race test-fzf test-e2e fmt-check check-versions
 
 # Build with Nix
 nix-build:
