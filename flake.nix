@@ -34,7 +34,7 @@
 
             src = lib.cleanSource ./.;
 
-            vendorHash = "sha256-9ah2bMMJL7fJ3+uIJB4ZR4ZEE1Zf8NUu8BdaG6/5J0o=";
+            vendorHash = "sha256-/IOjumt5PUf8YRQJ2PqBDjPRv8FP78FSQGjXPG5dnEQ=";
 
             ldflags = [
               "-s"
@@ -56,6 +56,7 @@
 
         treefmt = {
           projectRootFile = "flake.nix";
+          settings.global.excludes = ["third_party/fzf/**"];
 
           programs = {
             gofumpt.enable = true;
