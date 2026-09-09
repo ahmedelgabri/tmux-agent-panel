@@ -18,8 +18,8 @@ mise use github:ahmedelgabri/tmux-agent-panel
 # Nix
 nix run github:ahmedelgabri/tmux-agent-panel
 
-# Or build from source
-go build -o tap ./cmd/tap/
+# Or build from source (requires Go and patch)
+./scripts/with-fzf-patch go build -o tap ./cmd/tap/
 ```
 
 Then wire the agent hooks. Installation leaves integration contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config or pi extension. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`.
@@ -131,7 +131,7 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 - Claude's `blocked` fires immediately via the `PermissionRequest` hook (the `permission_prompt` notification only fires after a few seconds of user inactivity, and still routes to `blocked` as reinforcement). Approving a request runs the tool without re-firing `PreToolUse`, so `PostToolUse`/`PostToolUseFailure` map to `running` to clear `blocked` once the tool reports back; a denial clears on the agent's next tool call or `Stop`.
 - Claude's Notification routing keys on the payload's `notification_type` (permission types become `blocked`, input-needed types `waiting`, `idle_prompt` `idle`, completion types leave the state untouched); payloads without a recognized type fall back to matching English message text, degrading to `waiting`, never to a wrong `blocked`.
 - Codex fires `PermissionRequest` for auto-reviewed requests too (openai/codex#28833), so it can flash a false `blocked`; it self-corrects on that call's `PostToolUse`. Codex loads hooks at session start only.
-- fzf is compiled in ([`github.com/junegunn/fzf/src`](https://github.com/junegunn/fzf)) — its version is pinned at build time, so no installed fzf is needed and no version skew is possible. fzf's Go library API is not covered by stability guarantees; upgrades are deliberate, tested events.
+- fzf is compiled in ([`github.com/junegunn/fzf/src`](https://github.com/junegunn/fzf)) — its version is pinned at build time, so no installed fzf is needed and no version skew is possible. fzf's Go library API is not covered by stability guarantees; upgrades are deliberate, tested events. Use `just build`, the source-build command above, or Nix to include the [terminal-wait patch](patches/README.md); plain `go build` does not apply it.
 - fzf's own `--tmux`/popup mode cannot work embedded (it re-executes argv[0] and proxies stdio over FIFOs), so `tap pick` wraps itself in `tmux display-popup` instead.
 
 ## Development

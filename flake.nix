@@ -34,7 +34,11 @@
 
             src = lib.cleanSource ./.;
 
-            vendorHash = "sha256-WVCd71o8MW5ER7Wwd3a/eBcfhtFVYCnORSiY/vblxv0=";
+            vendorHash = "sha256-Vxd1/Nnd2NEGywWkd3F0Orbh1W4tc1d66I8TNHCmUhQ=";
+
+            modPostBuild = ''
+              patch -d vendor/github.com/junegunn/fzf -p1 < ${./patches/fzf-select-eintr.patch}
+            '';
 
             ldflags = [
               "-s"
@@ -56,7 +60,6 @@
 
         treefmt = {
           projectRootFile = "flake.nix";
-          settings.global.excludes = ["third_party/fzf/**"];
 
           programs = {
             gofumpt.enable = true;
@@ -88,6 +91,7 @@
             govulncheck
             gotools # goimports
             just
+            patch
           ];
 
           inputsFrom = [config.treefmt.build.devShell];

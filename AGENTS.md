@@ -10,7 +10,7 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 - `internal/cmd/` — cobra commands (`pick`, `state`, `install`, `uninstall`, `doctor`, hidden `__list`/`__toggle`)
 - `internal/panes/` — pane listing and row rendering (the picker's model)
 - `internal/picker/` — embedded fzf UI (`github.com/junegunn/fzf/src`)
-- `third_party/fzf/` — local v0.74.2 library replacement for upstream issue #4917; only the terminal `select` retry limit is patched. See `README.tap.md` there for provenance, tests, and removal steps. Do not reformat upstream files
+- `patches/` — fzf terminal `select` retry fix for upstream issue #4917. Nix applies it through `modPostBuild`; `scripts/with-fzf-patch` applies it to a private dependency copy for `just` and release builds. See `patches/README.md`. Plain `go build` does not apply the patch
 - `internal/state/` — writes `@agent_state`/`@agent_task` pane options
 - `internal/agents/` — hook installers for Claude Code, Codex, and pi
 - `internal/tmux/` — thin tmux command wrapper

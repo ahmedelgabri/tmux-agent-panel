@@ -61,7 +61,7 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          go build -ldflags="-s -w -X github.com/ahmedelgabri/tmux-agent-panel/internal/cmd.Version=$VERSION" -o tap-native ./cmd/tap/
+          ./scripts/with-fzf-patch go build -ldflags="-s -w -X github.com/ahmedelgabri/tmux-agent-panel/internal/cmd.Version=$VERSION" -o tap-native ./cmd/tap/
 
           mkdir -p dist/completions
           ./tap-native completion bash > dist/completions/tap.bash
@@ -82,7 +82,7 @@ jobs:
             DIR="tap-${VERSION}-${OS}-${ARCH}"
 
             mkdir -p "dist/${DIR}"
-            GOOS="$OS" GOARCH="$ARCH" go build -ldflags="$LDFLAGS" -o "dist/${DIR}/tap" ./cmd/tap/
+            GOOS="$OS" GOARCH="$ARCH" ./scripts/with-fzf-patch go build -ldflags="$LDFLAGS" -o "dist/${DIR}/tap" ./cmd/tap/
             cp -r dist/completions "dist/${DIR}/"
 
             tar -czf "dist/${DIR}.tar.gz" -C dist "$DIR"

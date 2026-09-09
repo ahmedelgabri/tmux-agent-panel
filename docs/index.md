@@ -34,7 +34,7 @@ mise use github:ahmedelgabri/tmux-agent-panel
 nix run github:ahmedelgabri/tmux-agent-panel
 
 # Or build from source
-go build -o tap ./cmd/tap/
+./scripts/with-fzf-patch go build -o tap ./cmd/tap/
 ```
 
 Wire the agent hooks and verify:

@@ -4,23 +4,23 @@ default:
 
 # Build the binary
 build:
-    go build -o tap ./cmd/tap/
+    ./scripts/with-fzf-patch go build -o tap ./cmd/tap/
 
 # Run Go unit tests
 test *args:
-    go test {{ args }} ./...
+    ./scripts/with-fzf-patch go test {{ args }} ./...
 
 # Run Go unit tests with race detector
 test-race *args:
-    go test -race {{ args }} ./...
+    ./scripts/with-fzf-patch go test -race {{ args }} ./...
 
 # Compare refresh command overhead on a private tmux server
 bench-refresh *args:
-    go test ./internal/picker -run '^$' -bench '^BenchmarkRefresh$' -benchmem {{ args }}
+    ./scripts/with-fzf-patch go test ./internal/picker -run '^$' -bench '^BenchmarkRefresh$' -benchmem {{ args }}
 
 # Run the patched fzf library's upstream tests
 test-fzf *args:
-    cd third_party/fzf && go test {{ args }} ./src/...
+    ./scripts/with-fzf-patch go test {{ args }} github.com/junegunn/fzf/src/...
 
 # Run E2E tests (bats)
 test-e2e *args: build
@@ -31,15 +31,15 @@ test-all: test test-fzf test-e2e
 
 # Run go vet
 vet:
-    go vet ./...
+    ./scripts/with-fzf-patch go vet ./...
 
 # Run staticcheck
 staticcheck:
-    staticcheck ./...
+    ./scripts/with-fzf-patch staticcheck ./...
 
 # Run govulncheck
 govulncheck:
-    govulncheck ./...
+    ./scripts/with-fzf-patch govulncheck ./...
 
 # Format all files
 fmt:

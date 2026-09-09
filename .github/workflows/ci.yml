@@ -55,6 +55,9 @@ jobs:
       - name: Run unit tests (race)
         run: nix develop --command just test-race
 
+      - name: Run patched fzf tests
+        run: nix develop --command just test-fzf
+
       - name: Run E2E tests
         run: nix develop --command just test-e2e
 
