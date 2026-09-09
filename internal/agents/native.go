@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -74,7 +75,7 @@ func claudeNative() (string, error) {
 }
 
 // Cache paths and active-version precedence follow plugin_base_root,
-// active_plugin_version, and compare_plugin_versions in:
+// active_plugin_version, validate_plugin_version_segment, and compare_plugin_versions in:
 // https://github.com/openai/codex/blob/2230d644/codex-rs/core-plugins/src/store.rs
 func codexNative() (string, error) {
 	hooks, err := codexHooksPath()
@@ -109,32 +110,21 @@ func codexNative() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("native plugin cache unavailable (%s); reinstall through Codex: %w", base, err)
 	}
-	// Codex prefers local, otherwise the greatest semantic version. tap
-	// publishes dotted triples; non-version cache names compare lexically.
-	version := ""
+	var versions []string
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || !validCodexPluginVersion(entry.Name()) {
 			continue
 		}
-		name := entry.Name()
-		if name == "local" {
-			version = name
-			break
+		if entry.Name() == "local" {
+			return nativeHooks(filepath.Join(base, "local"), plugins.CodexHooks)
 		}
-		a, aOK := parseVersion(version)
-		b, bOK := parseVersion(name)
-		newer := version < name
-		if aOK && bOK {
-			newer = versionLess(a, b)
-		}
-		if newer {
-			version = name
-		}
+		versions = append(versions, entry.Name())
 	}
-	if version == "" {
+	if len(versions) == 0 {
 		return "", fmt.Errorf("native plugin cache empty (%s); reinstall through Codex", base)
 	}
-	return nativeHooks(filepath.Join(base, version), plugins.CodexHooks)
+	slices.SortFunc(versions, compareCodexPluginVersions)
+	return nativeHooks(filepath.Join(base, versions[len(versions)-1]), plugins.CodexHooks)
 }
 
 // User-scope package paths and filters follow:
