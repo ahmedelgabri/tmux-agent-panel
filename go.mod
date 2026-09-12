@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/benjaminnkem/minimatch-go v0.1.0
-	github.com/junegunn/fzf v0.74.2
+	github.com/junegunn/fzf v0.74.4
 	github.com/junegunn/go-shellwords v0.0.0-20250127100254-2aa3b3277741
 	github.com/nlnwa/whatwg-url v0.6.2
 	github.com/pelletier/go-toml/v2 v2.4.3

@@ -30,15 +30,11 @@
           default = self'.packages.tap;
           tap = pkgs.buildGoModule {
             pname = "tap";
-            version = "0.2.1";
+            version = "0.2.2";
 
             src = lib.cleanSource ./.;
 
-            vendorHash = "sha256-Vxd1/Nnd2NEGywWkd3F0Orbh1W4tc1d66I8TNHCmUhQ=";
-
-            modPostBuild = ''
-              patch -d vendor/github.com/junegunn/fzf -p1 < ${./patches/fzf-select-eintr.patch}
-            '';
+            vendorHash = "sha256-Ih/GJl4P3cIalzkeN8OyhzQELnhqd7Uf3q+TEUsjwzs=";
 
             ldflags = [
               "-s"
@@ -91,7 +87,6 @@
             govulncheck
             gotools # goimports
             just
-            patch
           ];
 
           inputsFrom = [config.treefmt.build.devShell];
