@@ -29,6 +29,10 @@ type Agent struct {
 	// raw prompt, so their hooks don't store @agent_task and the picker
 	// parses the title instead.
 	TaskFromTitle bool
+	// App is the agent's stable name in Program Status Protocol (OSC 7501)
+	// reports, where the spec's own example is claude-code rather than
+	// tap's short name.
+	App string
 	// ConfigPath is where the integration lives for this user.
 	ConfigPath func() (string, error)
 	// Install wires the hooks; they invoke `tap` from PATH.
@@ -55,6 +59,7 @@ func All() []Agent {
 			Icon:          "✳",
 			Color:         ansi.Yellow,
 			TaskFromTitle: true,
+			App:           "claude-code",
 			ConfigPath:    claudeSettingsPath,
 			Install:       installClaude,
 			Uninstall:     uninstallClaude,
@@ -66,6 +71,7 @@ func All() []Agent {
 			Name:       "codex",
 			Icon:       "⌬",
 			Color:      ansi.Cyan,
+			App:        "codex",
 			ConfigPath: codexHooksPath,
 			Install:    installCodex,
 			Uninstall:  uninstallCodex,
@@ -77,6 +83,7 @@ func All() []Agent {
 			Name:       "pi",
 			Icon:       "π",
 			Color:      ansi.Magenta,
+			App:        "pi",
 			ConfigPath: piExtensionPath,
 			Install:    installPi,
 			Uninstall:  uninstallPi,

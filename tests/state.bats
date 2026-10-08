@@ -97,3 +97,21 @@ teardown() {
 	[ "$status" -eq 0 ]
 	[ -z "$output" ]
 }
+
+@test "osc7501 opt-in mirrors state to the pane's tty" {
+	tmx set-option -g @tap_osc7501 on
+	tmx pipe-pane -o -t "$TMUX_PANE" "cat > '$TMUX_TEST_DIR/out'"
+	"$TAP" state blocked --agent claude
+	# Escapes doubled for tmux passthrough; the task-less report has no msg.
+	expected=$'\ePtmux;\e\e]7501;state=blocked:kind=permission:id=pane-'"${TMUX_PANE#%}"$':app=claude-code\e\e\\\e\\'
+	wait_for grep -qF "$expected" "$TMUX_TEST_DIR/out"
+}
+
+@test "osc7501 stays silent without the opt-in" {
+	tmx pipe-pane -o -t "$TMUX_PANE" "cat > '$TMUX_TEST_DIR/out'"
+	"$TAP" state blocked --agent claude
+	"$TAP" state clear
+	run tmx show-options -pqv -t "$TMUX_PANE" @agent_state
+	[ -z "$output" ]
+	! grep -q 7501 "$TMUX_TEST_DIR/out" 2>/dev/null
+}

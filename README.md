@@ -123,6 +123,25 @@ tap state clear                              # unset all options
 
 Outside tmux every `state` invocation is a silent no-op, so hooks are safe to install unconditionally.
 
+### Program Status Protocol (OSC 7501)
+
+`tap state` can also mirror each pane's agent state to the outer terminal as a [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status) report, so terminals that understand OSC 7501 (e.g. Rex) can show agent status without parsing titles. It is opt-in, and tmux only forwards the sequence with passthrough enabled:
+
+```tmux
+set -g allow-passthrough on
+set -g @tap_osc7501 on # or per session/window/pane
+```
+
+| tap state | OSC 7501 report                    |
+| --------- | ---------------------------------- |
+| `running` | `state=working`                    |
+| `blocked` | `state=blocked:kind=permission`    |
+| `waiting` | `state=blocked:kind=question`      |
+| `idle`    | `state=idle`                       |
+| `clear`   | `state=clear` (removes the record) |
+
+Every report carries `id=pane-<N>` (the tmux pane id without `%`), `app` (`claude-code`, `codex`, or `pi`) and the pane's `@agent_task`, when set, as `msg`. The outer terminal sees the tmux client as a single terminal, so each pane is a separate child record and the root record is left alone. tmux passthrough only reaches attached clients, so reports from panes nobody is looking at can be missed. `tap doctor` flags a global opt-in without `allow-passthrough`.
+
 ## Notes and caveats
 
 - `tap install` splices hooks into existing JSON configs without reformatting unrelated content and replaces the pi extension wholesale. Install and uninstall back up existing JSON configs and pi extensions before every tap rewrite or managed removal to `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, including reinstalls that leave identical contents. Same-second collisions add `-1`, `-2`, etc. before `.tap.bak`, so later hand edits remain recoverable and no backup is overwritten. Old backups are never pruned. Symlinked JSON configs are followed; backups are created beside the target, and the symlink stays intact.

@@ -9,6 +9,7 @@ import (
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
 
 var doctorCmd = &cobra.Command{
@@ -35,6 +36,17 @@ an agent or modifying its package cache.`,
 					})
 				}
 			}
+		}
+		// Mirroring silently does nothing when tmux swallows the sequence,
+		// so flag the one setting that makes the opt-in useless. Only the
+		// global opt-in is checked; pane-level ones are the user's own.
+		if on, _ := tmux.Output("show-options", "-gqv", state.ProgramStatusOption); on == "on" {
+			pass, _ := tmux.Output("show-options", "-gwv", "allow-passthrough")
+			checks = append(checks, agents.Check{
+				Name:   "osc7501",
+				OK:     pass == "on" || pass == "all",
+				Detail: "allow-passthrough " + pass + " (OSC 7501 reports need it on to reach the terminal)",
+			})
 		}
 		failed := false
 		for _, c := range checks {

@@ -108,9 +108,11 @@ func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (stri
 		// One tmux invocation for all options; a `;` argument separates
 		// tmux commands, and each runs even if an earlier one fails
 		// because an option was never set.
-		_ = tmux.Run("set-option", "-pu", "-t", pane, StateOption, ";",
+		query, _ := tmux.Output("set-option", "-pu", "-t", pane, StateOption, ";",
 			"set-option", "-pu", "-t", pane, TaskOption, ";",
-			"set-option", "-pu", "-t", pane, AgentOption)
+			"set-option", "-pu", "-t", pane, AgentOption, ";",
+			"display-message", "-p", "-t", pane, programStatusQuery)
+		mirrorProgramStatus("clear", pane, query)
 		return "clear", nil
 	}
 
@@ -141,9 +143,12 @@ func Set(st, agent string, titleStdin bool, title string, stdin io.Reader) (stri
 	if agent != "" {
 		args = append(args, ";", "set-option", "-p", "-t", pane, AgentOption, agent)
 	}
-	if err := tmux.Run(args...); err != nil {
+	args = append(args, ";", "display-message", "-p", "-t", pane, programStatusQuery)
+	query, err := tmux.Output(args...)
+	if err != nil {
 		return "", err
 	}
+	mirrorProgramStatus(st, pane, query)
 	return st, nil
 }
 
