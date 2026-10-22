@@ -4,11 +4,10 @@
 package tmux
 
 import (
-	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
-	"strings"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/command"
 )
 
 // InsideTmux reports whether the process runs inside a tmux client.
@@ -20,31 +19,13 @@ func InsideTmux() bool {
 // on options that were never set are indistinguishable from real failures,
 // so callers that don't care pass the error through to a blank identifier.
 func Run(args ...string) error {
-	return run(exec.Command("tmux", args...))
+	return command.Run("tmux", args...)
 }
 
 // Output executes a tmux command and returns its stdout without the
 // trailing newline.
 func Output(args ...string) (string, error) {
-	cmd := exec.Command("tmux", args...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := run(cmd)
-	return strings.TrimRight(out.String(), "\n"), err
-}
-
-func run(cmd *exec.Cmd) error {
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		command := strings.Join(cmd.Args[:min(2, len(cmd.Args))], " ")
-		detail := strings.TrimSpace(stderr.String())
-		if detail != "" {
-			return fmt.Errorf("%s: %w: %s", command, err, detail)
-		}
-		return fmt.Errorf("%s: %w", command, err)
-	}
-	return nil
+	return command.Output("tmux", args...)
 }
 
 // RunAttached executes a tmux command wired to the current terminal; used
