@@ -18,6 +18,7 @@ fzf is embedded as a Go library, so the only runtime dependency is tmux itself.
 - **Hook installation** with `tap install` backs up existing JSON configs and pi extensions before every rewrite, including byte-identical reinstalls. `tap uninstall` also backs them up before removing tap-managed content. Backups use `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, with `-1`, `-2`, etc. before `.tap.bak` for same-second collisions; none are overwritten or pruned.
 - **Agent-native install channels**: Claude Code plugin, Codex plugin, and a pi package (`pi-tmux-agent-panel`)
 - **Embedded fzf** — no fzf installation, no version skew
+- **Rex support**: inside a [Rex](https://www.superlogical.com/rex) terminal the picker lists every Rex pane and reads the agents' own program status reports, so no hooks are needed there
 - **Agent-focused by default.** `ctrl-a` toggles all panes and `ctrl-p` toggles the preview. The footer keeps every keymap visible. Selection follows the pane across reordered updates. `ctrl-x` kills a pane immediately; `ctrl-w` and `ctrl-q` ask for confirmation before killing a window or session.
 - **Diagnostics** with `tap doctor` check user-scoped direct hooks and native plugin/package installs. Project-scoped installs and one-session CLI overrides are not checked.
 

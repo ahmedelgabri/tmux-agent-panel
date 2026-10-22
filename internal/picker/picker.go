@@ -5,7 +5,8 @@
 // re-exec would hit tap's main and Go channels don't cross processes). So
 // tap wraps itself instead: outside a popup it re-executes `tap pick
 // --in-popup` via `tmux display-popup -E` and the inner invocation runs fzf
-// plain, owning the whole popup.
+// plain, owning the whole popup. In Rex the popup is a floating pane (see
+// rex.go).
 //
 // An in-process poller animates busy glyphs through fzf's display fields.
 // Only pane changes reload the list, after a pause in typing. fzf exports
@@ -31,6 +32,7 @@ import (
 
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/panes"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
 
@@ -56,8 +58,9 @@ func keymap(key, action string) string {
 
 // Run shows the picker and switches to the chosen pane.
 func Run(inPopup bool) error {
-	if !tmux.InsideTmux() {
-		return errors.New("must be run inside tmux")
+	inRex := rex.InsideRex()
+	if !tmux.InsideTmux() && !inRex {
+		return errors.New("must be run inside tmux or Rex")
 	}
 	self, err := os.Executable()
 	if err != nil {
@@ -65,6 +68,9 @@ func Run(inPopup bool) error {
 	}
 
 	if !inPopup {
+		if inRex {
+			return openRexPopup(self)
+		}
 		return tmux.RunAttached("display-popup", "-E", "-w", "85%", "-h", "85%",
 			shellQuote(self)+" pick --in-popup")
 	}
@@ -77,8 +83,13 @@ func Run(inPopup bool) error {
 	sock := filepath.Join(dir, "fzf.sock")
 
 	// The pane the picker was opened from cannot change while the popup is
-	// open; resolve it once and let every reload child inherit it.
-	if current, err := tmux.Output("display-message", "-p", "#{pane_id}"); err == nil {
+	// open; resolve it once and let every reload child inherit it. A Rex
+	// popup already got it from its opener.
+	actions := tmuxActions
+	if inRex {
+		enterRexPopup()
+		actions = rexActions(self)
+	} else if current, err := tmux.Output("display-message", "-p", "#{pane_id}"); err == nil {
 		os.Setenv(panes.CurrentPaneEnv, current)
 	}
 
@@ -102,7 +113,7 @@ func Run(inPopup bool) error {
 		initial, prompt = snapshot.Agents, PromptAgents
 	}
 
-	opts, err := fzf.ParseOptions(false, buildArgs(self, sock, prompt))
+	opts, err := fzf.ParseOptions(false, buildArgs(self, sock, prompt, actions))
 	if err != nil {
 		return err
 	}
@@ -140,13 +151,29 @@ func Run(inPopup bool) error {
 	// Non-selectable rows (spacer, orphan warning) have an empty pane_id
 	// field, making Enter on them a no-op.
 	paneID, _, _ := strings.Cut(selected[0], "\t")
+	if inRex && paneID != "" {
+		return switchRex(paneID)
+	}
 	if strings.HasPrefix(paneID, "%") {
 		return tmux.Run("switch-client", "-Z", "-t", paneID)
 	}
 	return nil
 }
 
-func buildArgs(self, sock, prompt string) []string {
+// paneActions are the multiplexer commands the fzf bindings run on {1}, the
+// highlighted row's pane ID, and {2}, its address.
+type paneActions struct {
+	preview, killPane, killWindow, killSession string
+}
+
+var tmuxActions = paneActions{
+	preview:     "[ -n {1} ] && tmux capture-pane -ep -t {1} || true",
+	killPane:    "[ -n {1} ] && tmux kill-pane -t {1}",
+	killWindow:  confirmKill("window"),
+	killSession: confirmKill("session"),
+}
+
+func buildArgs(self, sock, prompt string, actions paneActions) []string {
 	reload := reloadAction(self)
 	return []string{
 		"--ansi",
@@ -173,10 +200,10 @@ func buildArgs(self, sock, prompt string) []string {
 		"--color", "bg+:-1,border:0,label:4,header-border:0,footer:8,footer-border:0,footer-label:8",
 		"--bind", "ctrl-p:toggle-preview",
 		"--bind", "ctrl-a:transform:" + shellQuote(self) + " __toggle",
-		"--bind", "ctrl-x:execute-silent([ -n {1} ] && tmux kill-pane -t {1})+" + reload,
-		"--bind", "ctrl-w:execute(" + confirmKill("window") + ")+" + reload,
-		"--bind", "ctrl-q:execute(" + confirmKill("session") + ")+" + reload,
-		"--preview", "[ -n {1} ] && tmux capture-pane -ep -t {1} || true",
+		"--bind", "ctrl-x:execute-silent(" + actions.killPane + ")+" + reload,
+		"--bind", "ctrl-w:execute(" + actions.killWindow + ")+" + reload,
+		"--bind", "ctrl-q:execute(" + actions.killSession + ")+" + reload,
+		"--preview", actions.preview,
 		"--preview-window", "down,60%,border-top",
 		"--preview-label-pos", "3",
 		"--bind", `focus:transform-preview-label:printf " %s " {2}`,
@@ -197,7 +224,11 @@ func shellQuote(s string) string {
 // fzf expands placeholders before suspending for execute, so confirmation
 // stays attached to the original pane even if live updates reorder the list.
 func confirmKill(kind string) string {
-	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && tmux kill-%s -t {1}`, kind, kind)
+	return confirm(kind, "tmux kill-"+kind+" -t {1}")
+}
+
+func confirm(kind, kill string) string {
+	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && %s`, kind, kill)
 }
 
 // Pane-ID-tracked reloads block fzf input. Spinner frames instead change the

@@ -29,6 +29,9 @@ type Agent struct {
 	// raw prompt, so their hooks don't store @agent_task and the picker
 	// parses the title instead.
 	TaskFromTitle bool
+	// App is the `app` the agent reports itself as in Program Status
+	// Protocol (OSC 7501) records, which is how Rex panes name their agent.
+	App string
 	// ConfigPath is where the integration lives for this user.
 	ConfigPath func() (string, error)
 	// Install wires the hooks; they invoke `tap` from PATH.
@@ -55,6 +58,7 @@ func All() []Agent {
 			Icon:          "✳",
 			Color:         ansi.Yellow,
 			TaskFromTitle: true,
+			App:           "claude-code",
 			ConfigPath:    claudeSettingsPath,
 			Install:       installClaude,
 			Uninstall:     uninstallClaude,
@@ -66,6 +70,7 @@ func All() []Agent {
 			Name:       "codex",
 			Icon:       "⌬",
 			Color:      ansi.Cyan,
+			App:        "codex",
 			ConfigPath: codexHooksPath,
 			Install:    installCodex,
 			Uninstall:  uninstallCodex,
@@ -77,6 +82,7 @@ func All() []Agent {
 			Name:       "pi",
 			Icon:       "π",
 			Color:      ansi.Magenta,
+			App:        "pi",
 			ConfigPath: piExtensionPath,
 			Install:    installPi,
 			Uninstall:  uninstallPi,
@@ -101,6 +107,16 @@ func Names() []string {
 func ByName(name string) (Agent, bool) {
 	for _, a := range All() {
 		if a.Name == name {
+			return a, true
+		}
+	}
+	return Agent{}, false
+}
+
+// ForApp maps a program status record's app to its agent.
+func ForApp(app string) (Agent, bool) {
+	for _, a := range All() {
+		if a.App == app {
 			return a, true
 		}
 	}

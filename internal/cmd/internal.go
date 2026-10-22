@@ -49,7 +49,34 @@ var toggleCmd = &cobra.Command{
 	},
 }
 
+// Rex's kill bindings need the session and window of a block, which only
+// the rex CLI can look up; tmux's bindings call tmux directly.
+var killCmd = &cobra.Command{
+	Use:    "__kill <pane|window|session> <block>",
+	Hidden: true,
+	Args:   cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return picker.KillRex(args[0], args[1])
+	},
+}
+
+// Rex's preview binding needs its capture rewritten before fzf sees it;
+// tmux's binding calls tmux directly.
+var previewCmd = &cobra.Command{
+	Use:    "__preview <block>",
+	Hidden: true,
+	Args:   cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		out, err := picker.PreviewRex(args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Println(out)
+		return nil
+	},
+}
+
 func init() {
 	listCmd.Flags().BoolVar(&listAgentsOnly, "agents", false, "agent panes only")
-	rootCmd.AddCommand(listCmd, toggleCmd)
+	rootCmd.AddCommand(listCmd, toggleCmd, killCmd, previewCmd)
 }

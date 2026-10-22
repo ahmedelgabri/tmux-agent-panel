@@ -11,7 +11,9 @@
 // filtering would tear apart anyway; a blank spacer row sets the agent
 // block apart. The
 // `_shared` session is skipped: its windows are linked into the named
-// sessions, so listing it would only duplicate rows.
+// sessions, so listing it would only duplicate rows. Inside Rex the panes
+// come from Rex instead, with state from the agents' own program status
+// reports (see rex.go).
 package panes
 
 import (
@@ -25,6 +27,7 @@ import (
 
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
@@ -100,8 +103,23 @@ func Orphaned(p Pane) bool {
 	return p.State != "" && !named && !commanded
 }
 
-// BuildRows renders panes into one sorted, column-aligned table.
+// parsePanes parses list-panes lines, skipping malformed ones.
+func parsePanes(lines []string) []Pane {
+	var ps []Pane
+	for _, l := range lines {
+		if p, ok := ParsePane(l); ok {
+			ps = append(ps, p)
+		}
+	}
+	return ps
+}
+
+// BuildRows renders list-panes lines into one sorted, column-aligned table.
 func BuildRows(lines []string, o Options) []Row {
+	return buildRows(parsePanes(lines), o)
+}
+
+func buildRows(ps []Pane, o Options) []Row {
 	type entry struct {
 		pane Pane
 		meta agents.Agent
@@ -110,11 +128,7 @@ func BuildRows(lines []string, o Options) []Row {
 	hasAgents := false
 	winWidth, cmdWidth, taskWidth, orphans := 0, 0, 0, 0
 
-	for _, line := range lines {
-		p, ok := ParsePane(line)
-		if !ok {
-			continue
-		}
+	for _, p := range ps {
 		// Counted before the agents-only filter: an orphan is by definition
 		// not an agent row, but the warning must show in both views.
 		if Orphaned(p) {
@@ -141,7 +155,7 @@ func BuildRows(lines []string, o Options) []Row {
 			// The task lives in the pane title for TaskFromTitle agents;
 			// the leading status glyph is dropped here.
 			if p.Task == "" && meta.TaskFromTitle {
-				p.Task = stripFirstWord(p.Title)
+				p.Task = stripStatusGlyph(p.Title)
 			}
 			if p.State == "" {
 				p.State = fallbackState(meta, p.Title)
@@ -253,23 +267,22 @@ func listOutput() (string, error) {
 
 // Fetch lists panes tmux-wide in parsed form.
 func Fetch() ([]Pane, error) {
+	if rex.InsideRex() {
+		return fetchRex()
+	}
 	out, err := listOutput()
 	if err != nil {
 		return nil, err
 	}
-	var ps []Pane
-	for _, l := range strings.Split(out, "\n") {
-		if p, ok := ParsePane(l); ok {
-			ps = append(ps, p)
-		}
-	}
-	return ps, nil
+	return parsePanes(strings.Split(out, "\n")), nil
 }
 
 // Keep rows independent of the clock so unchanged panes do not need reloads.
 func listOptions(agentsOnly bool, home string) Options {
 	current := os.Getenv(CurrentPaneEnv)
-	if current == "" {
+	if current == "" && rex.InsideRex() {
+		current = rex.Block()
+	} else if current == "" {
 		current, _ = tmux.Output("display-message", "-p", "#{pane_id}")
 	}
 	return Options{
@@ -319,25 +332,24 @@ func List(agentsOnly bool, home string) (string, error) {
 		}
 		return snapshot.All, nil
 	}
-	out, err := listOutput()
+	ps, err := Fetch()
 	if err != nil {
 		return "", err
 	}
-	return Render(BuildRows(strings.Split(out, "\n"), listOptions(agentsOnly, home))), nil
+	return Render(buildRows(ps, listOptions(agentsOnly, home))), nil
 }
 
 // ListViews renders both views from one tmux sample, ignoring any cached snapshot.
 func ListViews(home string) (Snapshot, error) {
-	out, err := listOutput()
+	ps, err := Fetch()
 	if err != nil {
 		return Snapshot{}, err
 	}
-	lines := strings.Split(out, "\n")
 	o := listOptions(true, home)
-	agents := BuildRows(lines, o)
+	agents := buildRows(ps, o)
 	agentText, animated := renderPicker(agents)
 	o.AgentsOnly = false
-	allText, _ := renderPicker(BuildRows(lines, o))
+	allText, _ := renderPicker(buildRows(ps, o))
 	return Snapshot{
 		All:       allText,
 		Agents:    agentText,
@@ -407,8 +419,10 @@ func containsNonASCII(s string) bool {
 	return strings.IndexFunc(s, func(r rune) bool { return r < ' ' || r > '~' }) >= 0
 }
 
-func stripFirstWord(s string) string {
-	if _, rest, ok := strings.Cut(s, " "); ok {
+// Rex shows Claude's idle title without the ✳, so only a glyph is dropped,
+// never the title's first word.
+func stripStatusGlyph(s string) string {
+	if first, rest, ok := strings.Cut(s, " "); ok && containsNonASCII(first) {
 		return rest
 	}
 	return s

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
 )
 
 // Check is one doctor finding.
@@ -18,7 +20,16 @@ type Check struct {
 func Doctor() []Check {
 	var checks []Check
 
-	if path, err := exec.LookPath("tmux"); err == nil {
+	// Inside Rex, tap talks to Rex instead and needs no tmux.
+	if rex.InsideRex() {
+		if path, err := exec.LookPath("rex"); err == nil {
+			version, _ := exec.Command("rex", "version").Output()
+			first, _, _ := strings.Cut(string(version), "\n")
+			checks = append(checks, Check{"rex", true, path + " (" + strings.TrimSpace(first) + ")"})
+		} else {
+			checks = append(checks, Check{"rex", false, "not found on PATH — tap cannot work in Rex without it"})
+		}
+	} else if path, err := exec.LookPath("tmux"); err == nil {
 		version, _ := exec.Command("tmux", "-V").Output()
 		checks = append(checks, Check{"tmux", true, path + " (" + strings.TrimSpace(string(version)) + ")"})
 	} else {

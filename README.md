@@ -123,6 +123,53 @@ tap state clear                              # unset all options
 
 Outside tmux every `state` invocation is a silent no-op, so hooks are safe to install unconditionally.
 
+### Rex
+
+`tap pick` also works inside a [Rex](https://www.superlogical.com/rex) terminal (`$REX_BLOCK` is set and the process is not inside tmux). It lists every terminal pane in every Rex session with one `rex do` Lua script, opens the picker in a floating pane over the current tab, previews with `rex capture`, and switches with `rex focus` plus the app's `session.select` action.
+
+Rex needs no hooks. Claude Code, Codex, and pi report their own state with the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status) (OSC 7501) as `app=claude-code`, `codex`, and `pi`, and the picker reads those records. `tap state` stays a no-op in Rex: writing reports from the hooks would overwrite the agents' own, e.g. replace Claude's `done` with `idle` at `Stop`.
+
+| Program status                 | tap state |
+| ------------------------------ | --------- |
+| `working`                      | `running` |
+| `blocked` with `kind=question` | `waiting` |
+| any other `blocked`            | `blocked` |
+| `idle`, `done`, `error`        | `idle`    |
+
+Claude Code sends no message with its reports, so its task still comes from the pane title. Records from other programs (a build tool, say) are ignored.
+
+To open the picker from a Rex key, define an action in `init.lua` that opens the same floating pane `tap pick` does:
+
+```lua
+rex.action {
+	name = 'tap_pick',
+	title = 'Agent Pane Picker',
+	run = function(ctx)
+		local _, err = rex.session.new_layer {
+			bounds = { 0.075, 0.075, 0.85, 0.85 },
+			focus = true,
+			layout = rex.layout.block {
+				flavor = 'com.superlogical.terminal.shell',
+				options = {
+					command = { 'env', 'TAP_CURRENT_PANE=' .. ctx.block_id, 'tap', 'pick', '--in-popup' },
+				},
+			},
+		}
+		if err ~= nil then
+			error(err, 0)
+		end
+	end,
+}
+
+rex.bind('ctrl+space', 'tap_pick')
+```
+
+Caveats:
+
+- Rex currently draws floating panes without a background, so the panes underneath show through the picker until Rex fixes it.
+- Switching calls the app's `session.select` action, which needs Remote Control turned on in Rex's settings and exactly one connected app (or `REX_CLIENT`).
+- As under tmux, fzf matches only the visible columns, so a query can't match a session name.
+
 ## Notes and caveats
 
 - `tap install` splices hooks into existing JSON configs without reformatting unrelated content and replaces the pi extension wholesale. Install and uninstall back up existing JSON configs and pi extensions before every tap rewrite or managed removal to `<file>.<YYYYMMDDTHHMMSS>.tap.bak`, including reinstalls that leave identical contents. Same-second collisions add `-1`, `-2`, etc. before `.tap.bak`, so later hand edits remain recoverable and no backup is overwritten. Old backups are never pruned. Symlinked JSON configs are followed; backups are created beside the target, and the symlink stays intact.

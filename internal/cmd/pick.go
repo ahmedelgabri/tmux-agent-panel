@@ -11,7 +11,8 @@ var inPopup bool
 var pickCmd = &cobra.Command{
 	Use:   "pick",
 	Short: "Open the pane picker",
-	Long: `Opens the agent-aware pane picker in a tmux popup. It starts focused
+	Long: `Opens the agent-aware pane picker in a tmux popup, or a floating pane
+in Rex. It starts focused
 on agent panes, sorted blocked → waiting → running → idle, and the list
 live-refreshes while open (with no agent panes it starts on all panes).
 Enter switches to the selected pane; ctrl-a toggles between the agents

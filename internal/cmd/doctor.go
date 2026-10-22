@@ -15,7 +15,7 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check tap's runtime dependencies and hook wiring",
 	Long: `Checks runtime dependencies, user-scoped direct hooks and native
-plugin/package installs, and pane state on the current tmux server.
+plugin/package installs, and pane state on the current tmux or Rex server.
 Project-scoped installs, managed settings, and one-session agent CLI
 overrides are not checked. Native installs are inspected without running
 an agent or modifying its package cache.`,

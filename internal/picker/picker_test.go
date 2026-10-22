@@ -13,8 +13,12 @@ import (
 )
 
 func TestBuildArgs(t *testing.T) {
-	args := buildArgs("/tmp/it's a tap/tap", "/tmp/test.sock", PromptAgents)
+	self := "/tmp/it's a tap/tap"
+	args := buildArgs(self, "/tmp/test.sock", PromptAgents, tmuxActions)
 	if _, err := fzf.ParseOptions(false, args); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fzf.ParseOptions(false, buildArgs(self, "/tmp/test.sock", PromptAgents, rexActions(self))); err != nil {
 		t.Fatal(err)
 	}
 	for i, arg := range args {
