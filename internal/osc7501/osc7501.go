@@ -8,21 +8,14 @@
 // https://www.superlogical.com/rex/docs/build/program-status
 package osc7501
 
-import "github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
-
-// Record is a pane's root record, keyed as in the protocol.
+// Record is a pane's root record, keyed as in the protocol. App picks the
+// pane's agent (see agents.ForApp); Title, a human-readable label, names it.
 type Record struct {
 	App   string `json:"app"`
+	Title string `json:"title"`
 	State string `json:"state"`
 	Kind  string `json:"kind"`
 	Msg   string `json:"msg"`
-}
-
-// Agent returns the agent the record's app names. Any program can report
-// status; only agents' records become agent state, or a build tool's
-// record would read as an orphaned agent.
-func (r Record) Agent() (agents.Agent, bool) {
-	return agents.ForApp(r.App)
 }
 
 // TapState maps the record to a tap state. done and error both leave the

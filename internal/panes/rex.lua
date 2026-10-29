@@ -36,11 +36,12 @@ for _, session in ipairs(rex.call('session.list', {}).sessions) do
 						pane_index = pane_index,
 						command = foreground.name,
 						path = foreground.cwd,
-						title = call('title', target).title,
+						pane_title = call('title', target).title,
 						state = root.state,
 						kind = root.kind,
 						app = root.app,
 						msg = root.msg,
+						title = root.title,
 					})
 				end
 			end

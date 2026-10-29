@@ -119,3 +119,23 @@ teardown() {
 	[[ "$output" == *"outdated"* ]]
 	[[ "$output" == *"tap install"* ]]
 }
+
+@test "install refuses to run outside tmux unless forced" {
+	run env -u TMUX -u TMUX_PANE -u REX_BLOCK "$TAP" install --claude
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not inside tmux"*"--force"* ]]
+	run grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	[ "$status" -eq 1 ]
+
+	run env -u TMUX -u TMUX_PANE -u REX_BLOCK "$TAP" install --claude --force
+	[ "$status" -eq 0 ]
+	grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+}
+
+@test "install refuses to run in Rex, where agents report their own state" {
+	run env -u TMUX -u TMUX_PANE REX_BLOCK=block:test "$TAP" install --claude
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"inside Rex"*"--force"* ]]
+	run grep -q 'tap state' "$CLAUDE_CONFIG_DIR/settings.json"
+	[ "$status" -eq 1 ]
+}

@@ -20,8 +20,8 @@ type Agent struct {
 	Name string
 	// Icon is the picker glyph and Color its ANSI slot, distinct per agent:
 	// Claude yellow (closest named slot to its orange), Codex cyan, pi
-	// magenta. The picker composes them so the agent-name column can share
-	// the color.
+	// magenta, opencode blue, Amp green (its brand color). The picker
+	// composes them so the agent-name column can share the color.
 	Icon  string
 	Color string
 	// TaskFromTitle marks agents that publish a live task summary in the
@@ -30,7 +30,8 @@ type Agent struct {
 	// parses the title instead.
 	TaskFromTitle bool
 	// App is the `app` the agent reports itself as in Program Status
-	// Protocol (OSC 7501) records, which is how Rex panes name their agent.
+	// Protocol (OSC 7501) records, which is how hosts that keep records
+	// (Rex) name a pane's agent.
 	App string
 	// ConfigPath is where the integration lives for this user.
 	ConfigPath func() (string, error)
@@ -113,14 +114,25 @@ func ByName(name string) (Agent, bool) {
 	return Agent{}, false
 }
 
-// ForApp maps a program status record's app to its agent.
-func ForApp(app string) (Agent, bool) {
-	for _, a := range All() {
+// reporters are agents tap knows only from their program status records.
+// They have no hooks to install, so they stay out of All.
+func reporters() []Agent {
+	return []Agent{
+		{Name: "opencode", Icon: "▣", Color: ansi.Blue, App: "opencode"},
+		{Name: "amp", Icon: "◈", Color: ansi.Green, App: "amp"},
+	}
+}
+
+// ForApp maps a program status record's app to its agent. The protocol
+// cannot tell an agent from any other program, so an unknown app becomes a
+// generic agent named after it.
+func ForApp(app string) Agent {
+	for _, a := range append(All(), reporters()...) {
 		if a.App == app {
-			return a, true
+			return a
 		}
 	}
-	return Agent{}, false
+	return Agent{Name: app, Icon: "●", Color: ansi.Gray}
 }
 
 // ForCommand maps a pane's current command to its agent. Home Manager

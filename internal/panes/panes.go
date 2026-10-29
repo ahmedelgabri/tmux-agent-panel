@@ -12,7 +12,8 @@
 // block apart. The
 // `_shared` session is skipped: its windows are linked into the named
 // sessions, so listing it would only duplicate rows. Inside Rex the panes
-// come from Rex instead, with state from the agents' own program status
+// come from Rex instead, and every program that reports its status there
+// shows as an agent, with state from its own program status
 // reports (see rex.go).
 package panes
 
@@ -52,6 +53,9 @@ type Pane struct {
 	Task    string // @agent_task, may be empty
 	Title   string // pane_title
 	Agent   string // @agent_name, may be empty
+	// The program status record's app and title, outside tmux only.
+	App      string
+	AppTitle string
 }
 
 // Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
@@ -98,9 +102,26 @@ func ParsePane(line string) (Pane, bool) {
 // after an unclean agent exit. The picker warns about such panes and
 // doctor explains them; neither guesses an agent.
 func Orphaned(p Pane) bool {
-	_, named := agents.ByName(p.Agent)
-	_, commanded := agents.ForCommand(p.Command)
-	return p.State != "" && !named && !commanded
+	_, isAgent := agentOf(p)
+	return p.State != "" && !isAgent
+}
+
+// agentOf resolves the agent a pane runs. A program status record names it
+// outright, by its title before its app. Otherwise the hook-reported
+// @agent_name wins: pane_current_command is unreliable on some systems
+// (wrappers, generic interpreters).
+func agentOf(p Pane) (agents.Agent, bool) {
+	if p.App != "" || p.AppTitle != "" {
+		a := agents.ForApp(p.App)
+		if p.AppTitle != "" {
+			a.Name = p.AppTitle
+		}
+		return a, true
+	}
+	if a, ok := agents.ByName(p.Agent); ok {
+		return a, true
+	}
+	return agents.ForCommand(p.Command)
 }
 
 // parsePanes parses list-panes lines, skipping malformed ones.
@@ -134,12 +155,7 @@ func buildRows(ps []Pane, o Options) []Row {
 		if Orphaned(p) {
 			orphans++
 		}
-		// The hook-reported @agent_name wins: pane_current_command is
-		// unreliable on some systems (wrappers, generic interpreters).
-		meta, isAgent := agents.ByName(p.Agent)
-		if !isAgent {
-			meta, isAgent = agents.ForCommand(p.Command)
-		}
+		meta, isAgent := agentOf(p)
 		if o.AgentsOnly && !isAgent {
 			continue
 		}

@@ -22,7 +22,7 @@ nix run github:ahmedelgabri/tmux-agent-panel
 go build -o tap ./cmd/tap/
 ```
 
-Then wire the agent hooks. Installation leaves integration contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config or pi extension. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`.
+Under tmux, wire the agent hooks. Only tmux needs them: in [Rex](#rex), agents report their own state. `tap install` refuses to run outside tmux unless you pass `--force`, e.g. to prepare hooks for tmux sessions you start later. Installation leaves integration contents unchanged on repeat runs, but saves a timestamped backup before every rewrite of an existing JSON config or pi extension. By default, it only modifies agents whose binary is on `PATH`. Force a subset with `--claude`, `--codex`, or `--pi`.
 
 ```sh
 tap install
@@ -70,7 +70,7 @@ bind-key Space run-shell 'tap pick'
 
 ### Reading the list
 
-- Rows lead with an icon instead of a `session:window.pane` column: agent panes show their agent — yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi — and plain panes show the pane type, `❐` session or `⧉` persistent popup (`popup_*` sessions). The full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
+- Rows lead with an icon instead of a `session:window.pane` column: agent panes show their agent — yellow `✳` Claude Code, cyan `⌬` Codex, magenta `π` pi, and in Rex also blue `▣` opencode, green `◈` Amp, and gray `●` any other program that reports its status — and plain panes show the pane type, `❐` session or `⧉` persistent popup (`popup_*` sessions). The full address appears as the preview border label for the focused row. A blue `●` marks the pane the picker was opened from.
 - State glyphs: green `⠋` running, red `▲` blocked, yellow `?` waiting, dim `◌` idle. The running glyph animates every 200 ms through display-only updates, without interrupting input with a list reload.
 - The `_shared` session is hidden (its windows are linked into named sessions and would duplicate rows).
 
@@ -98,7 +98,7 @@ Pick one channel per agent, either the plugin or `tap install`, to avoid duplica
 
 ## How it works
 
-Agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`, `@agent_name`) through hooks that invoke `tap state`. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. The installed hooks pass `--agent <agent>` so the pane's agent is recorded explicitly; for panes without an `@agent_name` the picker falls back to deriving it from the pane's current command.
+Under tmux, agents report state into pane-scoped tmux user options (`@agent_state`, `@agent_task`, `@agent_name`) through hooks that invoke `tap state`. Hooks run as children of the agent process, so `$TMUX_PANE` identifies the right pane. The installed hooks pass `--agent <agent>` so the pane's agent is recorded explicitly; for panes without an `@agent_name` the picker falls back to deriving it from the pane's current command.
 
 | Agent       | Integration                                | States                                     |
 | ----------- | ------------------------------------------ | ------------------------------------------ |
@@ -127,7 +127,7 @@ Outside tmux every `state` invocation is a silent no-op, so hooks are safe to in
 
 `tap pick` also works inside a [Rex](https://www.superlogical.com/rex) terminal (`$REX_BLOCK` is set and the process is not inside tmux). It lists every terminal pane in every Rex session with one `rex do` Lua script, opens the picker in a floating pane over the current tab, previews with `rex capture`, and switches with `rex focus` plus the app's `session.select` action.
 
-Rex needs no hooks. Claude Code, Codex, and pi report their own state with the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status) (OSC 7501) as `app=claude-code`, `codex`, and `pi`, and the picker reads those records. `tap state` stays a no-op in Rex: writing reports from the hooks would overwrite the agents' own, e.g. replace Claude's `done` with `idle` at `Stop`.
+Rex needs no hooks, so skip `tap install` there. Agents report their own state with the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status) (OSC 7501), Rex keeps the records, and the picker reads them. See [Are we OSC 7501 yet?](https://areweosc7501yet.com/) for which agents support it. `tap state` stays a no-op in Rex: writing reports from the hooks would overwrite the agents' own, e.g. replace Claude's `done` with `idle` at `Stop`.
 
 | Program status                 | tap state |
 | ------------------------------ | --------- |
@@ -136,7 +136,7 @@ Rex needs no hooks. Claude Code, Codex, and pi report their own state with the [
 | any other `blocked`            | `blocked` |
 | `idle`, `done`, `error`        | `idle`    |
 
-Claude Code sends no message with its reports, so its task still comes from the pane title. Records from other programs (a build tool, say) are ignored.
+The protocol cannot tell an agent from any other program, so every pane whose program reports its status shows as an agent. The record's `title` names it, or else its `app`; a record with neither is ignored. The `app` picks the icon: `claude-code`, `codex`, `pi`, `opencode`, and `amp` get their own, and any other app (Crush, goose, or a build tool) gets a gray `●`. Claude Code sends no message with its reports, so its task still comes from the pane title.
 
 To open the picker from a Rex key, define an action in `init.lua` that opens the same floating pane `tap pick` does:
 

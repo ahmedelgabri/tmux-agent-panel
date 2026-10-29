@@ -1,15 +1,33 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
 )
 
-var installFlags = map[string]*bool{}
+var (
+	installFlags = map[string]*bool{}
+	installForce bool
+)
+
+// checkInstallHost stops installs where the hooks would do nothing. They
+// may still serve tmux sessions started later, hence --force.
+func checkInstallHost() error {
+	if installForce || tmux.InsideTmux() {
+		return nil
+	}
+	if rex.InsideRex() {
+		return errors.New("inside Rex, agents report their own state, so tap's hooks are not needed; pass --force to install them anyway (e.g. for tmux)")
+	}
+	return errors.New("not inside tmux, the only place tap's hooks report state; run this inside tmux, or pass --force to install anyway")
+}
 
 var installCmd = &cobra.Command{
 	Use:   "install",
@@ -25,9 +43,15 @@ before .tap.bak. Backups are never overwritten or pruned.
 
 By default only agents whose binary is on PATH are wired; pass --claude,
 --codex, or --pi to force a specific subset. Files managed by Nix/Home
-Manager are refused — wire those declaratively instead.`,
+Manager are refused — wire those declaratively instead.
+
+Only tmux needs the hooks: in Rex, agents report their own state. Install
+refuses to run outside tmux unless --force is given.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkInstallHost(); err != nil {
+			return err
+		}
 		return forEachSelected(func(a agents.Agent) error {
 			return a.Install()
 		}, "installed")
@@ -86,5 +110,6 @@ func init() {
 			c.Flags().BoolVar(flag, a.Name, false, "only "+a.Name)
 		}
 	}
+	installCmd.Flags().BoolVar(&installForce, "force", false, "install outside tmux")
 	rootCmd.AddCommand(installCmd, uninstallCmd)
 }

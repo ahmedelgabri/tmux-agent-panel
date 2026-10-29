@@ -30,7 +30,7 @@ type rexPane struct {
 	PaneIndex   int    `json:"pane_index"`
 	Command     string `json:"command"`
 	Path        string `json:"path"`
-	Title       string `json:"title"`
+	PaneTitle   string `json:"pane_title"`
 	osc7501.Record
 }
 
@@ -65,11 +65,15 @@ func parseRex(out, picker string) ([]Pane, error) {
 			Window:  e.Window,
 			Command: e.Command,
 			Path:    e.Path,
-			Title:   e.Title,
+			Title:   e.PaneTitle,
 		}
-		if a, ok := e.Record.Agent(); ok {
-			p.Agent = a.Name
-			p.State = e.Record.TapState()
+		// The protocol cannot tell an agent from a build tool, so every
+		// program that reports status shows as one; a record without a
+		// title or an app names nothing to show.
+		if e.App != "" || e.Title != "" {
+			p.App = e.App
+			p.AppTitle = e.Title
+			p.State = e.TapState()
 			p.Task = e.Msg
 		}
 		ps = append(ps, p)
