@@ -70,11 +70,11 @@ func TestPickerFrames(t *testing.T) {
 	}
 	for i, wire := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
 		fields := strings.Split(wire, "\t")
-		if len(fields) != 4+len(spinnerFrames) || fields[0] != rows[i].PaneID || fields[1] != rows[i].Addr {
+		if len(fields) != 5+len(spinnerFrames) || fields[0] != rows[i].PaneID || fields[1] != rows[i].Key || fields[2] != rows[i].Addr {
 			t.Fatalf("invalid picker fields: %q", fields)
 		}
 		for frame, glyph := range spinnerFrames {
-			display := fields[2] + fields[3+frame] + fields[3+len(spinnerFrames)]
+			display := fields[3] + fields[4+frame] + fields[4+len(spinnerFrames)]
 			want := rows[i].Display
 			if rows[i].spinnerPrefix != "" {
 				want = rows[i].spinnerPrefix + glyph + rows[i].spinnerSuffix
@@ -303,8 +303,8 @@ func TestRenderWireFormat(t *testing.T) {
 	rows := BuildRows(fixture, Options{})
 	out := Render(rows)
 	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
-		if len(strings.SplitN(l, "\t", 3)) != 3 {
-			t.Errorf("row is not 3 tab-separated fields: %q", l)
+		if len(strings.SplitN(l, "\t", 4)) != 4 {
+			t.Errorf("row is not 4 tab-separated fields: %q", l)
 		}
 	}
 }

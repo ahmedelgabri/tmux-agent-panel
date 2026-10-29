@@ -138,6 +138,8 @@ Rex needs no hooks, so skip `tap install` there. Agents report their own state w
 
 The protocol cannot tell an agent from any other program, so every pane whose program reports its status shows as an agent. The record's `title` names it, or else its `app`; a record with neither is ignored. The `app` picks the icon: `claude-code`, `codex`, `pi`, `opencode`, and `amp` get their own, and any other app (Crush, goose, or a build tool) gets a gray `●`. Claude Code sends no message with its reports, so its task still comes from the pane title.
 
+Agents that report subagents as child records (Claude Code and opencode do; Codex does not) get one indented row per running subagent under their own row, with its state and title. A subagent row switches to and previews its agent's pane.
+
 To open the picker from a Rex key, define an action in `init.lua` that opens the same floating pane `tap pick` does:
 
 ```lua

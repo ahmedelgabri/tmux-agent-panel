@@ -22,11 +22,11 @@ func TestBuildArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, arg := range args {
-		if arg == "--id-nth" && args[i+1] == "1" {
+		if arg == "--id-nth" && args[i+1] == "1,2" {
 			return
 		}
 	}
-	t.Fatal("reload tracking needs a stable pane identity")
+	t.Fatal("reload tracking needs a stable row identity: pane ID plus subagent key")
 }
 
 func TestKeymapFooter(t *testing.T) {
@@ -65,7 +65,7 @@ func TestConfirmKill(t *testing.T) {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	for _, kind := range []string{"window", "session"} {
 		for _, answer := range []string{"y\n", "Y\n", "n\n", "\n", ""} {
-			command := strings.NewReplacer("{1}", "'%42'", "{2}", "'main:1.0'").Replace(confirmKill(kind))
+			command := strings.NewReplacer("{1}", "'%42'", "{3}", "'main:1.0'").Replace(confirmKill(kind))
 			cmd := exec.Command("sh", "-c", command)
 			cmd.Stdin = strings.NewReader(answer)
 			out, _ := cmd.Output()
@@ -75,7 +75,7 @@ func TestConfirmKill(t *testing.T) {
 			}
 		}
 	}
-	command := strings.NewReplacer("{1}", "''", "{2}", "''").Replace(confirmKill("session"))
+	command := strings.NewReplacer("{1}", "''", "{3}", "''").Replace(confirmKill("session"))
 	if out, _ := exec.Command("sh", "-c", command).Output(); len(out) != 0 {
 		t.Fatalf("non-selectable row prompted: %s", out)
 	}

@@ -22,10 +22,15 @@ for _, session in ipairs(rex.call('session.list', {}).sessions) do
 						block_id = block.block_id,
 					}
 					local foreground = call('process', target).foreground or {}
-					local root = {}
+					-- children stays nil until a child arrives: Lua encodes an
+					-- empty table as an object, which a JSON array can't take.
+					local root, children = {}, nil
 					for _, record in ipairs(call('program_status', target).records or {}) do
 						if record.id == nil then
 							root = record
+						else
+							children = children or {}
+							table.insert(children, record)
 						end
 					end
 					table.insert(panes, {
@@ -42,6 +47,7 @@ for _, session in ipairs(rex.call('session.list', {}).sessions) do
 						app = root.app,
 						msg = root.msg,
 						title = root.title,
+						children = children,
 					})
 				end
 			end

@@ -28,6 +28,7 @@ import (
 
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/ansi"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/osc7501"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/tmux"
@@ -53,17 +54,22 @@ type Pane struct {
 	Task    string // @agent_task, may be empty
 	Title   string // pane_title
 	Agent   string // @agent_name, may be empty
-	// The program status record's app and title, outside tmux only.
+	// The program status record's app and title, and its child records
+	// (subagents), outside tmux only.
 	App      string
 	AppTitle string
+	Children []osc7501.Record
 }
 
-// Row is one picker entry. PaneID and Addr ride along as hidden fzf fields
-// (used by --preview and the preview label). Non-selectable rows (the
-// spacer, the orphan warning) have an empty PaneID, making selecting them
-// a no-op.
+// Row is one picker entry. PaneID, Key, and Addr ride along as hidden fzf
+// fields (used by --preview, cursor tracking, and the preview label).
+// Non-selectable rows (the spacer, the orphan warning) have an empty PaneID,
+// making selecting them a no-op.
 type Row struct {
-	PaneID  string
+	PaneID string
+	// Key tells apart rows that share a pane: subagent rows carry their
+	// record's ID, so fzf can track the cursor on one.
+	Key     string
 	Addr    string
 	Display string
 
@@ -75,7 +81,7 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 
 // PickerFields selects a spinner frame from the immutable picker row fields.
 func PickerFields(frame int) string {
-	return fmt.Sprintf("{3}{%d}{%d}", 4+frame%len(spinnerFrames), 4+len(spinnerFrames))
+	return fmt.Sprintf("{4}{%d}{%d}", 5+frame%len(spinnerFrames), 5+len(spinnerFrames))
 }
 
 // Options carries the ambient inputs so BuildRows stays pure and testable.
@@ -176,9 +182,7 @@ func buildRows(ps []Pane, o Options) []Row {
 			if p.State == "" {
 				p.State = fallbackState(meta, p.Title)
 			}
-			if r := []rune(p.Task); len(r) > state.TaskMaxLength {
-				p.Task = string(r[:state.TaskMaxLength-1]) + "…"
-			}
+			p.Task = truncateTask(p.Task)
 			if w := uniseg.StringWidth(p.Task); w > taskWidth {
 				taskWidth = w
 			}
@@ -201,9 +205,13 @@ func buildRows(ps []Pane, o Options) []Row {
 	// Agent rows sort by state rank (blocked first) but keep their
 	// original order within a state; plain rows keep list-panes order.
 	type agentRow struct {
-		row  Row
-		rank int
+		row      Row
+		children []Row
+		rank     int
 	}
+	// Blank stand-ins for the one-column mark and icon, so subagent rows
+	// line up with their agent's columns.
+	childIndent := " " + " " + " " + "  " + pad("", winWidth) + "  "
 	var agentRows []agentRow
 	var plainRows []Row
 	for _, e := range entries {
@@ -228,13 +236,28 @@ func buildRows(ps []Pane, o Options) []Row {
 		if e.meta.Name != "" {
 			prefix := lead + e.meta.Color + pad(e.meta.Name, cmdWidth) + ansi.Reset + "  "
 			suffix := " " + pad(p.Task, taskWidth) + "  " + ansi.Gray + p.Path + ansi.Reset
-			status := state.ByName(p.State)
-			row := Row{PaneID: p.ID, Addr: p.Addr, Display: prefix + status.Color + status.Glyph + ansi.Reset + suffix}
-			if p.State == "running" {
-				row.spinnerPrefix = prefix + status.Color
-				row.spinnerSuffix = ansi.Reset + suffix
+			// Subagents run in their agent's pane, so their rows share its
+			// pane ID: Enter and the preview go to that pane.
+			var children []Row
+			for i, c := range p.Children {
+				branch := "├─"
+				if i == len(p.Children)-1 {
+					branch = "└─"
+				}
+				label := c.Title
+				if label == "" {
+					label = c.Msg
+				}
+				childPrefix := childIndent + ansi.Gray + pad(branch, cmdWidth) + ansi.Reset + "  "
+				child := statusRow(p, childPrefix, c.TapState(), " "+truncateTask(label))
+				child.Key = c.ID
+				children = append(children, child)
 			}
-			agentRows = append(agentRows, agentRow{row: row, rank: status.Rank})
+			agentRows = append(agentRows, agentRow{
+				row:      statusRow(p, prefix, p.State, suffix),
+				children: children,
+				rank:     state.ByName(p.State).Rank,
+			})
 		} else {
 			display := lead + ansi.Cyan + pad(p.Command, cmdWidth) + ansi.Reset + plainGap + ansi.Gray + p.Path + ansi.Reset
 			plainRows = append(plainRows, Row{PaneID: p.ID, Addr: p.Addr, Display: display})
@@ -246,6 +269,7 @@ func buildRows(ps []Pane, o Options) []Row {
 	rows := make([]Row, 0, len(entries)+2)
 	for _, a := range agentRows {
 		rows = append(rows, a.row)
+		rows = append(rows, a.children...)
 	}
 	// A blank spacer sets the agent block apart when both groups are
 	// present; its empty PaneID makes Enter on it a no-op, and any query
@@ -268,11 +292,12 @@ func buildRows(ps []Pane, o Options) []Row {
 	return rows
 }
 
-// Render emits standalone list rows: pane_id, address, display, tab-separated.
+// Render emits standalone list rows: pane_id, key, address, display,
+// tab-separated.
 func Render(rows []Row) string {
 	var b strings.Builder
 	for _, r := range rows {
-		b.WriteString(r.PaneID + "\t" + r.Addr + "\t" + r.Display + "\n")
+		b.WriteString(r.PaneID + "\t" + r.Key + "\t" + r.Addr + "\t" + r.Display + "\n")
 	}
 	return b.String()
 }
@@ -385,7 +410,7 @@ func renderPicker(rows []Row) (string, bool) {
 			prefix = r.spinnerPrefix
 			animated = true
 		}
-		b.WriteString(r.PaneID + "\t" + r.Addr + "\t" + prefix)
+		b.WriteString(r.PaneID + "\t" + r.Key + "\t" + r.Addr + "\t" + prefix)
 		for _, glyph := range spinnerFrames {
 			b.WriteByte('\t')
 			if r.spinnerPrefix != "" {
@@ -411,6 +436,25 @@ func selectable(rows []Row) bool {
 // pad counts terminal cells, not runes: CJK and emoji content in tasks or
 // window names occupies two cells per rune, and rune-based padding would
 // misalign the columns after it.
+// statusRow puts a state glyph between prefix and suffix. Running rows keep
+// the two apart so the picker can animate the glyph.
+func statusRow(p Pane, prefix, st, suffix string) Row {
+	status := state.ByName(st)
+	row := Row{PaneID: p.ID, Addr: p.Addr, Display: prefix + status.Color + status.Glyph + ansi.Reset + suffix}
+	if st == "running" {
+		row.spinnerPrefix = prefix + status.Color
+		row.spinnerSuffix = ansi.Reset + suffix
+	}
+	return row
+}
+
+func truncateTask(task string) string {
+	if r := []rune(task); len(r) > state.TaskMaxLength {
+		return string(r[:state.TaskMaxLength-1]) + "…"
+	}
+	return task
+}
+
 func pad(s string, width int) string {
 	if n := width - uniseg.StringWidth(s); n > 0 {
 		return s + strings.Repeat(" ", n)

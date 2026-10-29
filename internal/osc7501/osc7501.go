@@ -8,9 +8,12 @@
 // https://www.superlogical.com/rex/docs/build/program-status
 package osc7501
 
-// Record is a pane's root record, keyed as in the protocol. App picks the
-// pane's agent (see agents.ForApp); Title, a human-readable label, names it.
+// Record is one program status record, keyed as in the protocol. A pane's
+// root record has no ID; agents report subagents as child records. App picks
+// the pane's agent (see agents.ForApp); Title, a human-readable label, names
+// it.
 type Record struct {
+	ID    string `json:"id"`
 	App   string `json:"app"`
 	Title string `json:"title"`
 	State string `json:"state"`

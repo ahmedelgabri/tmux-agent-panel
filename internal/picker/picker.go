@@ -161,7 +161,7 @@ func Run(inPopup bool) error {
 }
 
 // paneActions are the multiplexer commands the fzf bindings run on {1}, the
-// highlighted row's pane ID, and {2}, its address.
+// highlighted row's pane ID, and {3}, its address.
 type paneActions struct {
 	preview, killPane, killWindow, killSession string
 }
@@ -182,7 +182,7 @@ func buildArgs(self, sock, prompt string, actions paneActions) []string {
 		"--delimiter", "\t",
 		"--with-nth", panes.PickerFields(0),
 		"--track",
-		"--id-nth", "1",
+		"--id-nth", "1,2",
 		"--with-shell", "sh -c",
 		"--gutter", " ",
 		"--gutter-raw", " ",
@@ -206,7 +206,7 @@ func buildArgs(self, sock, prompt string, actions paneActions) []string {
 		"--preview", actions.preview,
 		"--preview-window", "down,60%,border-top",
 		"--preview-label-pos", "3",
-		"--bind", `focus:transform-preview-label:printf " %s " {2}`,
+		"--bind", `focus:transform-preview-label:printf " %s " {3}`,
 	}
 }
 
@@ -228,7 +228,7 @@ func confirmKill(kind string) string {
 }
 
 func confirm(kind, kill string) string {
-	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {2} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && %s`, kind, kill)
+	return fmt.Sprintf(`[ -n {1} ] && printf 'Kill %s containing %%s? [y/N] ' {3} && read -r answer && { [ "$answer" = y ] || [ "$answer" = Y ]; } && %s`, kind, kill)
 }
 
 // Pane-ID-tracked reloads block fzf input. Spinner frames instead change the

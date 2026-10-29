@@ -32,6 +32,7 @@ type rexPane struct {
 	Path        string `json:"path"`
 	PaneTitle   string `json:"pane_title"`
 	osc7501.Record
+	Children []osc7501.Record `json:"children"`
 }
 
 func fetchRex() ([]Pane, error) {
@@ -73,6 +74,7 @@ func parseRex(out, picker string) ([]Pane, error) {
 		if e.App != "" || e.Title != "" {
 			p.App = e.App
 			p.AppTitle = e.Title
+			p.Children = e.Children
 			p.State = e.TapState()
 			p.Task = e.Msg
 		}
