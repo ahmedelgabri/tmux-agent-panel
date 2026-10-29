@@ -1,8 +1,8 @@
-package state
+package osc7501
 
 import "testing"
 
-func TestFromProgramStatus(t *testing.T) {
+func TestTapState(t *testing.T) {
 	cases := map[[2]string]string{
 		{"working", ""}:           "running",
 		{"blocked", "permission"}: "blocked",
@@ -15,8 +15,8 @@ func TestFromProgramStatus(t *testing.T) {
 		{"", ""}:                  "idle",
 	}
 	for in, want := range cases {
-		if got := FromProgramStatus(in[0], in[1]); got != want {
-			t.Errorf("FromProgramStatus(%q, %q) = %q, want %q", in[0], in[1], got, want)
+		if got := (Record{State: in[0], Kind: in[1]}).TapState(); got != want {
+			t.Errorf("TapState(%q, %q) = %q, want %q", in[0], in[1], got, want)
 		}
 	}
 }

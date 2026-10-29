@@ -10,7 +10,8 @@ This repository uses the Jujutsu version control system (`jj`), colocated with g
 - `internal/cmd/` — cobra commands (`pick`, `state`, `install`, `uninstall`, `doctor`, hidden `__list`/`__toggle`/`__kill`)
 - `internal/panes/` — pane listing and row rendering (the picker's model); `rex.lua` lists Rex panes in one `rex do` call
 - `internal/picker/` — embedded fzf UI (`github.com/junegunn/fzf/src`)
-- `internal/state/` — writes `@agent_state`/`@agent_task` pane options; maps Rex program status records (OSC 7501) to tap states
+- `internal/state/` — writes `@agent_state`/`@agent_task` pane options (tmux only)
+- `internal/osc7501/` — maps Program Status Protocol (OSC 7501) records from hosts that keep them (Rex) to agents and tap states
 - `internal/agents/` — hook installers for Claude Code, Codex, and pi
 - `internal/tmux/` — thin tmux command wrapper
 - `internal/rex/` — thin rex command wrapper, the Rex counterpart of `internal/tmux/`

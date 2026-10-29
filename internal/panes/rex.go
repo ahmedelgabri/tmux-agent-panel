@@ -7,9 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ahmedelgabri/tmux-agent-panel/internal/agents"
+	"github.com/ahmedelgabri/tmux-agent-panel/internal/osc7501"
 	"github.com/ahmedelgabri/tmux-agent-panel/internal/rex"
-	"github.com/ahmedelgabri/tmux-agent-panel/internal/state"
 )
 
 // PickerPaneEnv carries the Rex pane the picker runs in. Unlike tmux popups,
@@ -32,10 +31,7 @@ type rexPane struct {
 	Command     string `json:"command"`
 	Path        string `json:"path"`
 	Title       string `json:"title"`
-	State       string `json:"state"`
-	Kind        string `json:"kind"`
-	App         string `json:"app"`
-	Msg         string `json:"msg"`
+	osc7501.Record
 }
 
 func fetchRex() ([]Pane, error) {
@@ -48,7 +44,7 @@ func fetchRex() ([]Pane, error) {
 
 // parseRex turns rexScript's output into the panes tmux's list-panes would
 // give. Agents report their own state in Rex as program status records
-// (see state.FromProgramStatus).
+// (see package osc7501).
 func parseRex(out, picker string) ([]Pane, error) {
 	// Lua encodes an empty table as an object, so no panes arrive as {}.
 	if strings.TrimSpace(out) == "{}" {
@@ -71,11 +67,9 @@ func parseRex(out, picker string) ([]Pane, error) {
 			Path:    e.Path,
 			Title:   e.Title,
 		}
-		// Any program can report status; only agents' records become agent
-		// state, or a build tool's record would read as an orphaned agent.
-		if a, ok := agents.ForApp(e.App); ok {
+		if a, ok := e.Record.Agent(); ok {
 			p.Agent = a.Name
-			p.State = state.FromProgramStatus(e.State, e.Kind)
+			p.State = e.Record.TapState()
 			p.Task = e.Msg
 		}
 		ps = append(ps, p)
