@@ -171,6 +171,22 @@ Caveats:
 - Rex currently draws floating panes without a background, so the panes underneath show through the picker until Rex fixes it.
 - Switching calls the app's `session.select` action, which needs Remote Control turned on in Rex's settings and exactly one connected app (or `REX_CLIENT`).
 - As under tmux, fzf matches only the visible columns, so a query can't match a session name.
+- If your Rex prefix is `ctrl+a`, a `prefix ctrl+a` binding to `pane.send_key` can't pass `ctrl-a` (the all/agents toggle) to the picker: Rex disables `pane.send_key` while a floating pane has focus. Bind it to an action that writes the byte to the focused pane instead:
+
+  ```lua
+  rex.bind('ctrl+a>ctrl+a', 'send_ctrl_a')
+  rex.action {
+  	name = 'send_ctrl_a',
+  	title = 'Send ctrl+a',
+  	run = function(ctx)
+  		if not ctx.block_id then
+  			return { ok = false }
+  		end
+  		rex.block.call('com.superlogical.terminal', 'write', { block_id = ctx.block_id, data = '\001' })
+  		return { ok = true }
+  	end,
+  }
+  ```
 
 ## Notes and caveats
 
